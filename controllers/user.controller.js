@@ -93,7 +93,7 @@ exports.createUser = async (req, res) => {
 // Cập nhật user theo ID
 exports.updateUser = async (req, res) => {
   try {
-    const { name, phoneNumber, email, role, isActive, password } = req.body;
+    const {username, name, phoneNumber, email, role, isActive, password } = req.body;
 
     const updateData = {
       name,
@@ -101,6 +101,7 @@ exports.updateUser = async (req, res) => {
       email,
       role,
       isActive,
+      username
     };
 
     // Nếu có cập nhật password, mã hóa nó
