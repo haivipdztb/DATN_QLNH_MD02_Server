@@ -24,6 +24,9 @@ var cashierRouter = require('./routes/cashier');
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
+// Tắt ETag để luôn trả về 200 thay vì 304
+app.set('etag', false);
+
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
