@@ -1,67 +1,74 @@
 #!/usr/bin/env node
 
 /**
- * Module dependencies.
+ * bin/www - entrypoint an toàn cho Express + socket.io
+ * - Chỉ gọi server.listen ở đây.
+ * - Không gọi listen trong app.js.
  */
 
-var app = require('../app');
-var debug = require('debug')('datn:server');
-var http = require('http');
+'use strict';
 
-/**
- * Get port from environment and store in Express.
- */
+const debug = require('debug')('app:server');
+const http = require('http');
+const app = require('../app');
 
-var port = normalizePort(process.env.PORT || '3000');
+// Import Server from socket.io
+const { Server } = require('socket.io');
+
+const port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
 
-/**
- * Create HTTP server.
- */
+// Tạo HTTP server từ express app
+const server = http.createServer(app);
 
-var server = http.createServer(app);
+// Khởi socket.io (với CORS permissive để tiện dev)
+let io;
+try {
+  io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+      credentials: true
+    }
+  });
 
-/**
- * Listen on provided port, on all network interfaces.
- */
+  // expose io cho các controller qua app.set('io', io)
+  app.set('io', io);
 
-server.listen(port);
+  io.on('connection', socket => {
+    console.log('socket connected', socket.id);
+    socket.on('join_room', payload => {
+      try {
+        const room = payload && payload.room ? payload.room : payload;
+        if (room) socket.join(room);
+      } catch (e) { console.warn('join_room error', e); }
+    });
+    socket.on('disconnect', () => console.log('socket disconnected', socket.id));
+  });
+} catch (e) {
+  console.warn('socket.io not started:', e && e.message ? e.message : e);
+}
+
+// Listen một lần duy nhất
+server.listen(port, () => {
+  console.log('Server listening on port', port);
+});
 server.on('error', onError);
 server.on('listening', onListening);
 
 /**
- * Normalize a port into a number, string, or false.
+ * Helpers
  */
-
 function normalizePort(val) {
-  var port = parseInt(val, 10);
-
-  if (isNaN(port)) {
-    // named pipe
-    return val;
-  }
-
-  if (port >= 0) {
-    // port number
-    return port;
-  }
-
+  const p = parseInt(val, 10);
+  if (isNaN(p)) return val;
+  if (p >= 0) return p;
   return false;
 }
 
-/**
- * Event listener for HTTP server "error" event.
- */
-
 function onError(error) {
-  if (error.syscall !== 'listen') {
-    throw error;
-  }
-
-  var bind = typeof port === 'string'
-    ? 'Pipe ' + port
-    : 'Port ' + port;
-
+  if (error.syscall !== 'listen') throw error;
+  const bind = typeof port === 'string' ? 'Pipe ' + port : 'Port ' + port;
   // handle specific listen errors with friendly messages
   switch (error.code) {
     case 'EACCES':
@@ -77,14 +84,8 @@ function onError(error) {
   }
 }
 
-/**
- * Event listener for HTTP server "listening" event.
- */
-
 function onListening() {
-  var addr = server.address();
-  var bind = typeof addr === 'string'
-    ? 'pipe ' + addr
-    : 'port ' + addr.port;
+  const addr = server.address();
+  const bind = typeof addr === 'string' ? 'pipe ' + addr : 'port ' + addr.port;
   debug('Listening on ' + bind);
 }

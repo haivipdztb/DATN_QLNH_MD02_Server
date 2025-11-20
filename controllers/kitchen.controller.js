@@ -1,278 +1,287 @@
-const {orderModel} = require('../model/order.model');
+const { orderModel } = require('../model/order.model');
 
-// Lấy tất cả order đang chờ và đang chuẩn bị (cho bếp)
-exports.getAllKitchenOrders = async (req, res) => {
+/**
+ * controllers/kitchen.controller.js
+ * - Hỗ trợ tìm item bằng _id hoặc menuItem/menuItemId
+ * - Normalize status từ các dạng VN/EN sang values chuẩn: pending, preparing, ready, soldout
+ * - Broadcast 'order_updated' tới room 'phucvu' nếu io được set trên app
+ */
+
+// Helper: chuẩn hóa trạng thái nhận được từ client
+function normalizeStatus(input) {
+  if (!input) return '';
+  const s = String(input).trim().toLowerCase();
+  if (s === 'received' || s === 'đã nhận' || s === 'da nhan' || s === 'dan nhan') return 'pending';
+  if (s === 'pending') return 'pending';
+  if (s === 'dang lam' || s === 'đang làm' || s === 'đang lam' || s === 'danglam') return 'preparing';
+  if (s === 'preparing' || s === 'processing') return 'preparing';
+  if (s === 'ready' || s === 'xong' || s === 'đã xong' || s === 'da xong') return 'ready';
+  if (s === 'soldout' || s === 'het' || s === 'hết' || s === 'đã hết') return 'soldout';
+  return s; // trả về nguyên dạng đã lowercase nếu không map được (sẽ validate sau)
+}
+
+// Helper để tìm OrderItem trong order (hỗ trợ subdoc _id hoặc match menuItem/menuItemId)
+function findOrderItem(order, itemId) {
+  if (!order || !order.items) return null;
+  // 1) thử tìm theo subdocument _id
+  try {
+    const bySubId = order.items.id(itemId);
+    if (bySubId) return bySubId;
+  } catch (e) {
+    // ignore
+  }
+
+  // 2) thử match theo menuItem (ObjectId) hoặc menuItemId field hoặc nested id
+  const found = order.items.find(it => {
+    if (!it) return false;
     try {
-        const orders = await orderModel.find({
-            orderStatus: {$in: ['pending', 'preparing']}
-        })
-        .populate('items.menuItem')
-        .populate('server', 'name')
-        .sort({createdAt: 1});
-
-        res.status(200).json({
-            success: true,
-            data: orders
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy danh sách order',
-            error: error.message
-        });
+      // it.menuItem có thể là ObjectId hoặc object; try common variants
+      const menuRef = it.menuItem || it.menuItemId || (it.menuItem && it.menuItem._id) || (it.menuItem && it.menuItem.id);
+      if (!menuRef) return false;
+      return String(menuRef) === String(itemId);
+    } catch (e) {
+      return false;
     }
-};
+  });
+  return found || null;
+}
 
-// Lấy chi tiết một order (cho bếp)
-exports.getKitchenOrderById = async (req, res) => {
+// Các handler:
+
+async function getAllKitchenOrders(req, res) {
+  try {
+    const orders = await orderModel.find({
+      orderStatus: { $in: ['pending', 'preparing'] }
+    })
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec();
+
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    console.error('getAllKitchenOrders error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách order', error: error.message });
+  }
+}
+
+async function getKitchenOrderById(req, res) {
+  try {
+    const order = await orderModel.findById(req.params.id)
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .lean()
+      .exec();
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+
+    return res.status(200).json({ success: true, data: order });
+  } catch (error) {
+    console.error('getKitchenOrderById error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi lấy chi tiết order', error: error.message });
+  }
+}
+
+async function updateItemStatus(req, res) {
+  try {
+    const { orderId, itemId } = req.params;
+    const { status } = req.body;
+
+    console.log('updateItemStatus called', { orderId, itemId, body: req.body });
+
+    const normalized = normalizeStatus(status);
+    const validStatuses = ['pending', 'preparing', 'ready', 'soldout'];
+    if (!validStatuses.includes(normalized)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trạng thái không hợp lệ',
+        received: status,
+        normalized
+      });
+    }
+
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+
+    // Tìm item theo nhiều cách
+    let item = findOrderItem(order, itemId);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy món trong order' });
+    }
+
+    item.status = normalized;
+    await order.save();
+
+    // Cập nhật trạng thái order tổng thể
+    try { await updateOrderStatus(order); } catch (e) { console.warn('updateOrderStatus warning', e); }
+
+    const updatedOrder = await orderModel.findById(orderId)
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .lean()
+      .exec();
+
+    // Broadcast tới room 'phucvu' nếu server expose io
     try {
-        const order = await orderModel.findById(req.params.id)
-            .populate('items.menuItem')
-            .populate('server', 'name');
-        
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy order'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: order
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy chi tiết order',
-            error: error.message
-        });
+      const io = req.app && req.app.get ? req.app.get('io') : null;
+      if (io) {
+        const payload = {
+          orderId: String(orderId),
+          itemId: String(itemId),
+          status: normalized,
+          tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined
+        };
+        io.to('phucvu').emit('order_updated', payload);
+      }
+    } catch (e) {
+      console.warn('Socket emit failed in updateItemStatus:', e);
     }
-};
 
-// Cập nhật trạng thái món ăn trong order
-exports.updateItemStatus = async (req, res) => {
+    return res.status(200).json({ success: true, message: 'Cập nhật trạng thái món thành công', data: updatedOrder });
+  } catch (error) {
+    console.error('updateItemStatus error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái món', error: error.message });
+  }
+}
+
+async function updateAllItemsStatus(req, res) {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    console.log('updateAllItemsStatus called', { orderId, body: req.body });
+
+    const normalized = normalizeStatus(status);
+    const validStatuses = ['pending', 'preparing', 'ready', 'soldout'];
+    if (!validStatuses.includes(normalized)) {
+      return res.status(400).json({ success: false, message: 'Trạng thái không hợp lệ', received: status, normalized });
+    }
+
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+
+    order.items.forEach(item => { item.status = normalized; });
+    await order.save();
+    try { await updateOrderStatus(order); } catch (e) { console.warn('updateOrderStatus warning', e); }
+
+    const updatedOrder = await orderModel.findById(orderId)
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .lean()
+      .exec();
+
     try {
-        const {orderId, itemId} = req.params;
-        const {status} = req.body;
-
-        // Validate status
-        const validStatuses = ['pending', 'preparing', 'ready', 'soldout'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Trạng thái không hợp lệ'
-            });
-        }
-
-        const order = await orderModel.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy order'
-            });
-        }
-
-        // Tìm và cập nhật trạng thái món
-        const item = order.items.id(itemId);
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy món trong order'
-            });
-        }
-
-        item.status = status;
-        await order.save();
-
-        // Cập nhật trạng thái order tổng thể
-        await updateOrderStatus(order);
-
-        const updatedOrder = await orderModel.findById(orderId)
-            .populate('items.menuItem')
-            .populate('server', 'name');
-
-        res.status(200).json({
-            success: true,
-            message: 'Cập nhật trạng thái món thành công',
-            data: updatedOrder
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi cập nhật trạng thái món',
-            error: error.message
-        });
+      const io = req.app && req.app.get ? req.app.get('io') : null;
+      if (io) {
+        const payload = { orderId: String(orderId), status: normalized, tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined };
+        io.to('phucvu').emit('order_updated', payload);
+      }
+    } catch (e) {
+      console.warn('Socket emit failed in updateAllItemsStatus:', e);
     }
-};
 
-// Cập nhật trạng thái tất cả món trong order
-exports.updateAllItemsStatus = async (req, res) => {
-    try {
-        const {orderId} = req.params;
-        const {status} = req.body;
+    return res.status(200).json({ success: true, message: 'Cập nhật trạng thái tất cả món thành công', data: updatedOrder });
+  } catch (error) {
+    console.error('updateAllItemsStatus error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái', error: error.message });
+  }
+}
 
-        const validStatuses = ['pending', 'preparing', 'ready', 'soldout'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Trạng thái không hợp lệ'
-            });
-        }
+async function startPreparing(req, res) {
+  try {
+    const { orderId } = req.params;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
 
-        const order = await orderModel.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy order'
-            });
-        }
+    order.items.forEach(item => { if (item.status === 'pending') item.status = 'preparing'; });
+    order.orderStatus = 'preparing';
+    await order.save();
 
-        // Cập nhật tất cả món
-        order.items.forEach(item => {
-            item.status = status;
-        });
+    const updatedOrder = await orderModel.findById(orderId)
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .lean()
+      .exec();
 
-        await order.save();
-        await updateOrderStatus(order);
+    return res.status(200).json({ success: true, message: 'Đã bắt đầu chuẩn bị order', data: updatedOrder });
+  } catch (error) {
+    console.error('startPreparing error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi bắt đầu chuẩn bị', error: error.message });
+  }
+}
 
-        const updatedOrder = await orderModel.findById(orderId)
-            .populate('items.menuItem')
-            .populate('server', 'name');
+async function markOrderReady(req, res) {
+  try {
+    const { orderId } = req.params;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
 
-        res.status(200).json({
-            success: true,
-            message: 'Cập nhật trạng thái tất cả món thành công',
-            data: updatedOrder
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi cập nhật trạng thái',
-            error: error.message
-        });
-    }
-};
+    order.items.forEach(item => { item.status = 'ready'; });
+    order.orderStatus = 'ready';
+    await order.save();
 
-// Bắt đầu chuẩn bị order (chuyển tất cả món sang preparing)
-exports.startPreparing = async (req, res) => {
-    try {
-        const {orderId} = req.params;
+    const updatedOrder = await orderModel.findById(orderId)
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .lean()
+      .exec();
 
-        const order = await orderModel.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy order'
-            });
-        }
+    return res.status(200).json({ success: true, message: 'Order đã sẵn sàng phục vụ', data: updatedOrder });
+  } catch (error) {
+    console.error('markOrderReady error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi đánh dấu order sẵn sàng', error: error.message });
+  }
+}
 
-        // Chuyển tất cả món sang preparing
-        order.items.forEach(item => {
-            if (item.status === 'pending') {
-                item.status = 'preparing';
-            }
-        });
+async function getOrdersByStatus(req, res) {
+  try {
+    const { status } = req.params;
+    const orders = await orderModel.find({ orderStatus: status })
+      .populate('items.menuItem')
+      .populate('server', 'name')
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec();
 
-        order.orderStatus = 'preparing';
-        await order.save();
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    console.error('getOrdersByStatus error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách order', error: error.message });
+  }
+}
 
-        const updatedOrder = await orderModel.findById(orderId)
-            .populate('items.menuItem')
-            .populate('server', 'name');
-
-        res.status(200).json({
-            success: true,
-            message: 'Đã bắt đầu chuẩn bị order',
-            data: updatedOrder
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi bắt đầu chuẩn bị',
-            error: error.message
-        });
-    }
-};
-
-// Đánh dấu order hoàn thành (tất cả món ready)
-exports.markOrderReady = async (req, res) => {
-    try {
-        const {orderId} = req.params;
-
-        const order = await orderModel.findById(orderId);
-        if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Không tìm thấy order'
-            });
-        }
-
-        // Chuyển tất cả món sang ready
-        order.items.forEach(item => {
-            item.status = 'ready';
-        });
-
-        order.orderStatus = 'ready';
-        await order.save();
-
-        const updatedOrder = await orderModel.findById(orderId)
-            .populate('items.menuItem')
-            .populate('server', 'name');
-
-        res.status(200).json({
-            success: true,
-            message: 'Order đã sẵn sàng phục vụ',
-            data: updatedOrder
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi đánh dấu order sẵn sàng',
-            error: error.message
-        });
-    }
-};
-
-// Lấy danh sách order theo trạng thái
-exports.getOrdersByStatus = async (req, res) => {
-    try {
-        const {status} = req.params;
-        
-        const orders = await orderModel.find({orderStatus: status})
-            .populate('items.menuItem')
-            .populate('server', 'name')
-            .sort({createdAt: 1});
-
-        res.status(200).json({
-            success: true,
-            data: orders
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy danh sách order',
-            error: error.message
-        });
-    }
-};
-
-// Helper function: Tự động cập nhật trạng thái order dựa trên trạng thái món
+// Helper cập nhật trạng thái order tổng thể
 async function updateOrderStatus(order) {
-    const allServed = order.items.every(item => item.status === 'soldout');
+  try {
+    const allSoldOut = order.items.every(item => item.status === 'soldout');
     const allReady = order.items.every(item => item.status === 'ready' || item.status === 'soldout');
     const anyPreparing = order.items.some(item => item.status === 'preparing');
     const allPending = order.items.every(item => item.status === 'pending');
 
-    if (allServed) {
-        order.orderStatus = 'soldout';
-    } else if (allReady) {
-        order.orderStatus = 'ready';
-    } else if (anyPreparing) {
-        order.orderStatus = 'preparing';
-    } else if (allPending) {
-        order.orderStatus = 'pending';
-    }
+    if (allSoldOut) order.orderStatus = 'soldout';
+    else if (allReady) order.orderStatus = 'ready';
+    else if (anyPreparing) order.orderStatus = 'preparing';
+    else if (allPending) order.orderStatus = 'pending';
 
     await order.save();
+  } catch (e) {
+    console.warn('updateOrderStatus helper error:', e);
+  }
 }
+
+module.exports = {
+  getAllKitchenOrders,
+  getKitchenOrderById,
+  updateItemStatus,
+  updateAllItemsStatus,
+  startPreparing,
+  markOrderReady,
+  getOrdersByStatus
+};

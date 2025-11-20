@@ -1,7 +1,7 @@
 // model/order.model.js
 const db = require('./db');
 
-// định nghĩa khuôn mẫu cho model
+// định nghĩa khuôn mẫu cho model (bao gồm các trường snapshot để lưu name/image/price tại thời điểm order)
 const orderSchema = new db.mongoose.Schema(
   {
     tableNumber: { type: Number, required: true },
@@ -9,15 +9,23 @@ const orderSchema = new db.mongoose.Schema(
     cashier: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
     items: [
       {
-        menuItem: { type: db.mongoose.Schema.Types.ObjectId, ref: 'menuModel' },
-        quantity: { type: Number },
-        price: { type: Number },
+        // tham chiếu tới menuModel (nếu có)
+        menuItem: { type: db.mongoose.Schema.Types.ObjectId, ref: 'menuModel', default: null },
+
+        // Snapshot fields: lưu name, image và price tại thời điểm tạo order
+        menuItemName: { type: String, default: '' },
+        imageUrl: { type: String, default: '' },
+
+        quantity: { type: Number, default: 1 },
+        price: { type: Number, default: 0 },
+
         status: {
           type: String,
           enum: ['pending', 'preparing', 'ready', 'soldout'],
           default: 'pending'
         }, // Trạng thái món: chờ, đang làm, sẵn sàng, hết món
-        note: { type: String } // Ghi chú đặc biệt cho món
+
+        note: { type: String, default: '' } // Ghi chú đặc biệt cho món
       }
     ],
     totalAmount: { type: Number, required: true },

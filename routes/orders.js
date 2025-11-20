@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/order.controller');
 
+const kitchenController = require('../controllers/kitchen.controller');
+
 // GET - Lấy danh sách tất cả orders (hỗ trợ ?tableNumber=)
 router.get('/', orderController.getAllOrders);
 
@@ -17,5 +19,8 @@ router.put('/:id', orderController.updateOrder);
 
 // DELETE - Xóa order theo ID
 router.delete('/:id', orderController.deleteOrder);
+
+router.patch('/:orderId/items/:itemId/status', kitchenController.updateItemStatus);
+
 
 module.exports = router;

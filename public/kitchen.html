@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Kitchen - Test</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>Kitchen Socket Test</h1>
+  <div id="log"></div>
+  <script>
+    const restaurantId = 'r1'; // thay bằng id thật
+    const stationId = 'grill'; // ví dụ
+
+    // kết nối
+    const socket = io('http://localhost:3000');
+
+    socket.on('connect', () => {
+      log('connected ' + socket.id);
+      socket.emit('join_station', { restaurantId, stationId });
+    });
+
+    socket.on('new_order', data => {
+      log('New order for this station: ' + JSON.stringify(data));
+      // tự động ack để test
+      socket.emit('ack_order', { orderId: data.orderId, stationId, kitchenUserId: 'k1' });
+    });
+
+    function log(txt) {
+      const d = document.createElement('div');
+      d.textContent = txt;
+      document.getElementById('log').appendChild(d);
+    }
+  </script>
+</body>
+</html>
