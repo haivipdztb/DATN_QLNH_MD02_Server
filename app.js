@@ -19,7 +19,7 @@ var usersRouter = require('./routes/users');
 var tablesRouter = require('./routes/tables');
 var kitchenRouter = require('./routes/kitchen');
 var cashierRouter = require('./routes/cashier');
-
+var ingredientRouter =require('./routes/ingredient');
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -44,6 +44,8 @@ app.use('/reports', reportsRouter);
 app.use('/tables', tablesRouter);
 app.use('/kitchen', kitchenRouter);
 app.use('/cashier', cashierRouter); 
+app.use('/ingredients', ingredientRouter); 
+
 
 
 // catch 404 and forward to error handler
