@@ -4,8 +4,6 @@ const { menuModel } = require('../model/menu.model'); // đảm bảo đường 
 
 /**
  * Helper: enrich incoming items array by looking up menuModel when menuItem id provided.
- * - Produces items shaped to match orderSchema (menuItem, menuItemName, imageUrl, price, quantity, status, note)
- * - If client provided snapshot fields already, prefer them; otherwise fill from menuModel document when available.
  */
 async function enrichItemsWithMenuData(rawItems = []) {
   const out = [];
@@ -22,15 +20,12 @@ async function enrichItemsWithMenuData(rawItems = []) {
         try {
           menuDoc = await menuModel.findById(menuId).select('name price image imageUrl thumbnail').lean().exec();
         } catch (e) {
-          // lookup failed - continue with client-provided data if any
           console.warn('enrichItemsWithMenuData: menu lookup failed for id=', menuId, e && e.message);
         }
       }
 
-      // quantity default to 1
       const quantity = (typeof it.quantity === 'number' && it.quantity > 0) ? it.quantity : 1;
 
-      // price: prefer explicit client-provided numeric price, otherwise menuDoc.price, otherwise 0
       let price = 0;
       if (typeof it.price === 'number' && !isNaN(it.price)) {
         price = it.price;
@@ -38,7 +33,6 @@ async function enrichItemsWithMenuData(rawItems = []) {
         price = menuDoc.price;
       }
 
-      // menuItemName: prefer client-provided menuItemName or name; fallback to menuDoc.name
       let menuItemName = '';
       if (it.menuItemName && String(it.menuItemName).trim()) {
         menuItemName = String(it.menuItemName).trim();
@@ -48,7 +42,6 @@ async function enrichItemsWithMenuData(rawItems = []) {
         menuItemName = menuDoc.name;
       }
 
-      // imageUrl: prefer client-provided imageUrl / image, otherwise menuDoc.image / imageUrl / thumbnail
       let imageUrl = '';
       if (it.imageUrl && String(it.imageUrl).trim()) imageUrl = String(it.imageUrl).trim();
       if (!imageUrl && it.image && String(it.image).trim()) imageUrl = String(it.image).trim();
@@ -56,7 +49,6 @@ async function enrichItemsWithMenuData(rawItems = []) {
         imageUrl = menuDoc.image || menuDoc.imageUrl || menuDoc.thumbnail || '';
       }
 
-      // status and note
       const status = it.status ? String(it.status) : 'pending';
       const note = it.note ? String(it.note) : '';
 
@@ -70,7 +62,6 @@ async function enrichItemsWithMenuData(rawItems = []) {
         note
       });
     } catch (e) {
-      // Skip problematic item but don't break the whole request
       console.warn('enrichItemsWithMenuData: failed to process item', e && e.message);
     }
   }
@@ -87,7 +78,6 @@ function populateOrderQuery(query) {
     .populate('cashier', 'name username')
     .populate({
       path: 'items.menuItem',
-      // include all possible image field names your menu model might use
       select: 'name price image imageUrl thumbnail'
     });
 }
@@ -97,7 +87,6 @@ function populateOrderQuery(query) {
  */
 exports.getAllOrders = async (req, res) => {
   try {
-    // Support optional tableNumber filter: /orders?tableNumber=1
     const filter = {};
     if (req.query && typeof req.query.tableNumber !== 'undefined' && req.query.tableNumber !== '') {
       const tn = Number(req.query.tableNumber);
@@ -146,9 +135,36 @@ exports.getOrderById = async (req, res) => {
 };
 
 /**
+ * Helper to emit socket events (uses req.app.get('io') if available).
+ * Emits both a global broadcast and a room-specific event (room name "table_<tableNumber>").
+ */
+function emitOrderEvent(req, eventName, payload) {
+  try {
+    // if express app saved io instance, use it
+    const io = req && req.app ? req.app.get('io') : null;
+    if (io) {
+      // broadcast to all connected clients
+      io.emit(eventName, payload);
+      // if payload contains tableNumber, emit to table room too
+      if (payload && (typeof payload.tableNumber !== 'undefined' || payload.tableNumber === 0)) {
+        const tn = payload.tableNumber;
+        try {
+          io.to(`table_${tn}`).emit(eventName, payload);
+        } catch (e) {
+          // ignore room emit errors
+        }
+      }
+    } else {
+      // no io attached to app - optional: log for debugging
+      console.warn('emitOrderEvent: io not found on req.app; skipping socket emit for', eventName);
+    }
+  } catch (e) {
+    console.warn('emitOrderEvent error:', e && e.message);
+  }
+}
+
+/**
  * POST /orders
- * - Enrich items if menuItem ids are present (server will save snapshot fields).
- * - Return populated order.
  */
 exports.createOrder = async (req, res) => {
   try {
@@ -158,11 +174,9 @@ exports.createOrder = async (req, res) => {
       paymentMethod, orderStatus
     } = req.body;
 
-    // Enrich items with menu data when possible (client may already have provided snapshot fields)
     const safeItems = Array.isArray(items) ? items : [];
     const enrichedItems = await enrichItemsWithMenuData(safeItems);
 
-    // compute totals if not provided
     const computedTotal = enrichedItems.reduce((acc, it) => acc + (Number(it.price || 0) * Number(it.quantity || 0)), 0);
     const total = (typeof totalAmount === 'number' && !isNaN(totalAmount)) ? totalAmount : computedTotal;
     const final = (typeof finalAmount === 'number' && !isNaN(finalAmount)) ? finalAmount : total;
@@ -179,17 +193,20 @@ exports.createOrder = async (req, res) => {
       orderStatus: orderStatus || 'pending'
     });
 
-    // debug: show preview of what will be saved
     if (process.env.NODE_ENV !== 'production') {
       console.log('createOrder: enrichedItems preview:', enrichedItems.slice(0, 10));
     }
 
     const saved = await newOrder.save();
 
-    // Return populated order so client receives menu item details
+    // populate before returning and before emitting
     let query = orderModel.findById(saved._id);
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
+
+    // Emit socket event so clients can update realtime
+    // event names: 'order_created' and 'order_updated' are used by Android client
+    emitOrderEvent(req, 'order_created', populated || saved);
 
     return res.status(201).json({
       success: true,
@@ -208,8 +225,6 @@ exports.createOrder = async (req, res) => {
 
 /**
  * PUT /orders/:id
- * - If items provided we enrich them before saving so snapshots are stored.
- * - Return populated updated order.
  */
 exports.updateOrder = async (req, res) => {
   try {
@@ -219,7 +234,6 @@ exports.updateOrder = async (req, res) => {
       paymentMethod, orderStatus, paidAt
     } = req.body;
 
-    // If items provided, enrich them before saving
     let enrichedItems = undefined;
     if (Array.isArray(items)) {
       enrichedItems = await enrichItemsWithMenuData(items);
@@ -254,6 +268,9 @@ exports.updateOrder = async (req, res) => {
     let query = orderModel.findById(updated._id);
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
+
+    // Emit socket event for updated order
+    emitOrderEvent(req, 'order_updated', populated || updated);
 
     return res.status(200).json({
       success: true,
