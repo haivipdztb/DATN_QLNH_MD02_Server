@@ -29,4 +29,7 @@ router.post('/invoices/:orderId/cancel', cashierController.cancelInvoice);
 // Thống kê doanh thu theo ngày
 router.get('/sales/daily', cashierController.getDailySales);
 
+// Tách hóa đơn (Split Bill)
+router.post('/invoices/:orderId/split', cashierController.splitInvoice);
+
 module.exports = router;

@@ -359,3 +359,132 @@ exports.getDailySales = async (req, res) => {
         });
     }
 };
+
+// Tách hóa đơn (Split Bill)
+exports.splitInvoice = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { splits } = req.body; 
+        // splits = [
+        //   { items: [{ menuItem: "id1", quantity: 2 }], paymentMethod: "cash" },
+        //   { items: [{ menuItem: "id2", quantity: 1 }], paymentMethod: "card" }
+        // ]
+
+        if (!splits || !Array.isArray(splits) || splits.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cần ít nhất 2 hóa đơn con để tách'
+            });
+        }
+
+        // Lấy order gốc
+        const originalOrder = await orderModel.findById(orderId).populate('items.menuItem');
+        
+        if (!originalOrder) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy hóa đơn'
+            });
+        }
+
+        if (originalOrder.orderStatus === 'paid' || originalOrder.orderStatus === 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể tách hóa đơn đã thanh toán hoặc đã hủy'
+            });
+        }
+
+        // Tạo các order mới từ splits
+        const newOrders = [];
+        
+        for (let i = 0; i < splits.length; i++) {
+            const split = splits[i];
+            
+            // Tính toán cho order con
+            let totalAmount = 0;
+            const enrichedItems = [];
+
+            for (const item of split.items) {
+                // Tìm item trong order gốc
+                const originalItem = originalOrder.items.find(
+                    oi => oi.menuItem._id.toString() === item.menuItem.toString()
+                );
+
+                if (!originalItem) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Món ${item.menuItem} không có trong hóa đơn gốc`
+                    });
+                }
+
+                const itemTotal = originalItem.price * item.quantity;
+                totalAmount += itemTotal;
+
+                enrichedItems.push({
+                    menuItem: originalItem.menuItem._id,
+                    menuItemName: originalItem.menuItemName || originalItem.menuItem.name,
+                    imageUrl: originalItem.imageUrl || originalItem.menuItem.image,
+                    quantity: item.quantity,
+                    price: originalItem.price,
+                    status: originalItem.status,
+                    note: item.note || originalItem.note
+                });
+            }
+
+            const discount = split.discount || 0;
+            const finalAmount = totalAmount - discount;
+
+            // Tạo order mới
+            const newOrder = new orderModel({
+                tableNumber: originalOrder.tableNumber,
+                server: originalOrder.server,
+                cashier: originalOrder.cashier,
+                items: enrichedItems,
+                totalAmount,
+                discount,
+                finalAmount,
+                paidAmount: 0,
+                change: 0,
+                paymentMethod: split.paymentMethod || 'cash',
+                orderStatus: 'pending',
+                splitTo: [] // Sẽ cập nhật sau
+            });
+
+            const saved = await newOrder.save();
+            newOrders.push(saved);
+        }
+
+        // Cập nhật order gốc
+        originalOrder.orderStatus = 'cancelled';
+        originalOrder.cancelReason = 'Đã tách thành nhiều hóa đơn';
+        originalOrder.cancelledAt = new Date();
+        originalOrder.splitTo = newOrders.map(o => o._id);
+        await originalOrder.save();
+
+        // Populate thông tin cho response
+        const populatedOrders = await orderModel.find({
+            _id: { $in: newOrders.map(o => o._id) }
+        })
+        .populate('server', 'name username')
+        .populate('cashier', 'name username')
+        .populate('items.menuItem', 'name price image')
+        .lean()
+        .exec();
+
+        res.status(200).json({
+            success: true,
+            message: `Đã tách hóa đơn thành ${newOrders.length} hóa đơn`,
+            data: {
+                originalOrderId: originalOrder._id,
+                newOrders: populatedOrders
+            }
+        });
+    } catch (error) {
+        console.error('splitInvoice error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi tách hóa đơn',
+            error: error.message
+        });
+    }
+};
