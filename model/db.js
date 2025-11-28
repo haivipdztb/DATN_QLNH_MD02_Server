@@ -9,8 +9,8 @@ mongoose.connect(mongoURI_Atlas, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
-.then(() => console.log('✅ Kết nối MongoDB  thành công!'))
-.catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
+    .then(() => console.log('✅ Kết nối MongoDB  thành công!'))
+    .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
 
 // Export mongoose để sử dụng trong models
 module.exports = { mongoose };

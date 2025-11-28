@@ -20,6 +20,10 @@ var tablesRouter = require('./routes/tables');
 var kitchenRouter = require('./routes/kitchen');
 var cashierRouter = require('./routes/cashier');
 var ingredientsRouter = require('./routes/ingredients');
+var vouchersRouter = require('./routes/vouchers');
+var shiftsRouter = require('./routes/shifts');
+var salaryRouter = require('./routes/salary');
+
 
 
 
@@ -42,20 +46,24 @@ app.use(cors());
 app.use('/users', usersRouter);
 app.use('/menu', menuRouter);
 app.use('/orders', ordersRouter);
-app.use('/reports', reportsRouter); 
+app.use('/reports', reportsRouter);
 app.use('/tables', tablesRouter);
 app.use('/kitchen', kitchenRouter);
 app.use('/cashier', cashierRouter);
-app.use('/ingredients', ingredientsRouter); 
+app.use('/ingredients', ingredientsRouter);
+app.use('/vouchers', vouchersRouter);
+app.use('/shifts', shiftsRouter);
+app.use('/salary', salaryRouter);
+
 
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   next(createError(404));
 });
 
 // error handler
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
   // set locals, only providing error in development
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};

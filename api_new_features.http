@@ -1,0 +1,540 @@
+### ========================================
+### VOUCHER APIs
+### ========================================
+
+### 1. Lấy tất cả voucher
+GET http://localhost:3000/vouchers
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "_id": "673f1234567890abcdef1234",
+#       "code": "SUMMER2024",
+#       "discountType": "percentage",
+#       "discountValue": 20,
+#       "minOrderValue": 100000,
+#       "maxDiscount": 50000,
+#       "startDate": "2024-06-01T00:00:00.000Z",
+#       "endDate": "2024-08-31T23:59:59.999Z",
+#       "usageLimit": 100,
+#       "usedCount": 25,
+#       "isActive": true,
+#       "description": "Giảm 20% cho đơn hàng mùa hè",
+#       "createdAt": "2024-05-01T10:00:00.000Z",
+#       "updatedAt": "2024-05-01T10:00:00.000Z"
+#     }
+#   ],
+#   "count": 1
+# }
+
+### 2. Lấy voucher theo ID
+GET http://localhost:3000/vouchers/673f1234567890abcdef1234
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": {
+#     "_id": "673f1234567890abcdef1234",
+#     "code": "SUMMER2024",
+#     "discountType": "percentage",
+#     "discountValue": 20,
+#     "minOrderValue": 100000,
+#     "maxDiscount": 50000,
+#     "startDate": "2024-06-01T00:00:00.000Z",
+#     "endDate": "2024-08-31T23:59:59.999Z",
+#     "usageLimit": 100,
+#     "usedCount": 25,
+#     "isActive": true,
+#     "description": "Giảm 20% cho đơn hàng mùa hè"
+#   }
+# }
+
+### 3. Tạo voucher mới
+POST http://localhost:3000/vouchers
+Content-Type: application/json
+
+{
+  "code": "NEWYEAR2025",
+  "discountType": "fixed",
+  "discountValue": 50000,
+  "minOrderValue": 200000,
+  "maxDiscount": 0,
+  "startDate": "2025-01-01",
+  "endDate": "2025-01-31",
+  "usageLimit": 50,
+  "description": "Giảm 50k cho đơn hàng năm mới"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Tạo voucher thành công",
+#   "data": {
+#     "_id": "673f5678901234abcdef5678",
+#     "code": "NEWYEAR2025",
+#     "discountType": "fixed",
+#     "discountValue": 50000,
+#     "minOrderValue": 200000,
+#     "maxDiscount": 0,
+#     "startDate": "2025-01-01T00:00:00.000Z",
+#     "endDate": "2025-01-31T00:00:00.000Z",
+#     "usageLimit": 50,
+#     "usedCount": 0,
+#     "isActive": true,
+#     "description": "Giảm 50k cho đơn hàng năm mới"
+#   }
+# }
+
+### 4. Validate voucher
+POST http://localhost:3000/vouchers/validate
+Content-Type: application/json
+
+{
+  "code": "SUMMER2024",
+  "orderValue": 150000
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Voucher hợp lệ",
+#   "data": {
+#     "voucher": {
+#       "_id": "673f1234567890abcdef1234",
+#       "code": "SUMMER2024",
+#       "discountType": "percentage",
+#       "discountValue": 20
+#     },
+#     "discountAmount": 30000,
+#     "finalAmount": 120000
+#   }
+# }
+
+### 5. Áp dụng voucher
+POST http://localhost:3000/vouchers/apply
+Content-Type: application/json
+
+{
+  "code": "SUMMER2024"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Áp dụng voucher thành công",
+#   "data": {
+#     "_id": "673f1234567890abcdef1234",
+#     "code": "SUMMER2024",
+#     "usedCount": 26
+#   }
+# }
+
+### 6. Cập nhật voucher
+PUT http://localhost:3000/vouchers/673f1234567890abcdef1234
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Cập nhật voucher thành công",
+#   "data": {
+#     "_id": "673f1234567890abcdef1234",
+#     "code": "SUMMER2024",
+#     "isActive": false
+#   }
+# }
+
+### 7. Xóa voucher
+DELETE http://localhost:3000/vouchers/673f1234567890abcdef1234
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Xóa voucher thành công",
+#   "data": {
+#     "_id": "673f1234567890abcdef1234",
+#     "code": "SUMMER2024"
+#   }
+# }
+
+
+### ========================================
+### SHIFT APIs (Ca làm việc)
+### ========================================
+
+### 1. Lấy tất cả ca làm việc
+GET http://localhost:3000/shifts
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "_id": "673f9012345678abcdef9012",
+#       "name": "Ca sáng",
+#       "startTime": "08:00",
+#       "endTime": "16:00",
+#       "date": "2024-11-28T00:00:00.000Z",
+#       "employees": [
+#         {
+#           "employeeId": {
+#             "_id": "673f0001",
+#             "name": "Nguyễn Văn A",
+#             "username": "nvana",
+#             "role": "waiter"
+#           },
+#           "checkinTime": "2024-11-28T08:05:00.000Z",
+#           "checkoutTime": "2024-11-28T16:00:00.000Z",
+#           "actualHours": 7.92,
+#           "status": "present",
+#           "note": ""
+#         }
+#       ],
+#       "status": "completed",
+#       "notes": ""
+#     }
+#   ],
+#   "count": 1
+# }
+
+### 2. Lấy ca làm việc theo ngày
+GET http://localhost:3000/shifts?date=2024-11-28
+# Response tương tự như trên
+
+### 3. Lấy ca làm việc theo nhân viên
+GET http://localhost:3000/shifts?employeeId=673f0001
+# Response tương tự như trên
+
+### 4. Lấy chi tiết ca làm việc
+GET http://localhost:3000/shifts/673f9012345678abcdef9012
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": {
+#     "_id": "673f9012345678abcdef9012",
+#     "name": "Ca sáng",
+#     "startTime": "08:00",
+#     "endTime": "16:00",
+#     "date": "2024-11-28T00:00:00.000Z",
+#     "employees": [
+#       {
+#         "employeeId": {
+#           "_id": "673f0001",
+#           "name": "Nguyễn Văn A",
+#           "username": "nvana",
+#           "role": "waiter",
+#           "phoneNumber": "0123456789",
+#           "email": "nvana@example.com"
+#         },
+#         "checkinTime": "2024-11-28T08:05:00.000Z",
+#         "checkoutTime": "2024-11-28T16:00:00.000Z",
+#         "actualHours": 7.92,
+#         "status": "present"
+#       }
+#     ],
+#     "status": "completed"
+#   }
+# }
+
+### 5. Tạo ca làm việc mới
+POST http://localhost:3000/shifts
+Content-Type: application/json
+
+{
+  "name": "Ca chiều",
+  "startTime": "14:00",
+  "endTime": "22:00",
+  "date": "2024-11-28",
+  "employees": [
+    {
+      "employeeId": "673f0001",
+      "status": "scheduled"
+    }
+  ],
+  "notes": "Ca chiều thứ 5"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Tạo ca làm việc thành công",
+#   "data": {
+#     "_id": "673f9999",
+#     "name": "Ca chiều",
+#     "startTime": "14:00",
+#     "endTime": "22:00",
+#     "date": "2024-11-28T00:00:00.000Z",
+#     "employees": [
+#       {
+#         "employeeId": "673f0001",
+#         "status": "scheduled",
+#         "actualHours": 0
+#       }
+#     ],
+#     "status": "scheduled"
+#   }
+# }
+
+### 6. Nhân viên check-in
+POST http://localhost:3000/shifts/673f9012345678abcdef9012/checkin
+Content-Type: application/json
+
+{
+  "employeeId": "673f0001"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Check-in thành công",
+#   "data": {
+#     "_id": "673f9012345678abcdef9012",
+#     "employees": [
+#       {
+#         "employeeId": "673f0001",
+#         "checkinTime": "2024-11-28T08:05:00.000Z",
+#         "status": "late"
+#       }
+#     ]
+#   }
+# }
+
+### 7. Nhân viên check-out
+POST http://localhost:3000/shifts/673f9012345678abcdef9012/checkout
+Content-Type: application/json
+
+{
+  "employeeId": "673f0001"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Check-out thành công",
+#   "data": {
+#     "_id": "673f9012345678abcdef9012",
+#     "employees": [
+#       {
+#         "employeeId": "673f0001",
+#         "checkinTime": "2024-11-28T08:05:00.000Z",
+#         "checkoutTime": "2024-11-28T16:00:00.000Z",
+#         "actualHours": 7.92,
+#         "status": "present"
+#       }
+#     ]
+#   }
+# }
+
+### 8. Lấy lịch sử ca làm việc của nhân viên
+GET http://localhost:3000/shifts/employee/673f0001
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "_id": "673f9012345678abcdef9012",
+#       "name": "Ca sáng",
+#       "date": "2024-11-28T00:00:00.000Z",
+#       "employeeData": {
+#         "employeeId": {
+#           "_id": "673f0001",
+#           "name": "Nguyễn Văn A"
+#         },
+#         "checkinTime": "2024-11-28T08:05:00.000Z",
+#         "checkoutTime": "2024-11-28T16:00:00.000Z",
+#         "actualHours": 7.92,
+#         "status": "present"
+#       }
+#     }
+#   ],
+#   "count": 1,
+#   "totalHours": 7.92
+# }
+
+### 9. Lấy lịch sử ca theo khoảng thời gian
+GET http://localhost:3000/shifts/employee/673f0001?startDate=2024-11-01&endDate=2024-11-30
+# Response tương tự như trên
+
+### 10. Cập nhật ca làm việc
+PUT http://localhost:3000/shifts/673f9012345678abcdef9012
+Content-Type: application/json
+
+{
+  "status": "completed"
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Cập nhật ca làm việc thành công",
+#   "data": {
+#     "_id": "673f9012345678abcdef9012",
+#     "status": "completed"
+#   }
+# }
+
+### 11. Xóa ca làm việc
+DELETE http://localhost:3000/shifts/673f9012345678abcdef9012
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Xóa ca làm việc thành công",
+#   "data": {
+#     "_id": "673f9012345678abcdef9012"
+#   }
+# }
+
+
+### ========================================
+### REPORT APIs (Báo cáo mới)
+### ========================================
+
+### 1. Tạo báo cáo theo tháng
+POST http://localhost:3000/reports/monthly
+Content-Type: application/json
+
+{
+  "month": 11,
+  "year": 2024
+}
+# Response mẫu:
+# {
+#   "success": true,
+#   "message": "Tạo báo cáo tháng thành công",
+#   "data": {
+#     "_id": "673fabc123",
+#     "reportType": "monthly_sales",
+#     "date": "2024-11-01T00:00:00.000Z",
+#     "timeFrame": "Month",
+#     "totalRevenue": 15000000,
+#     "totalOrders": 150,
+#     "totalDiscountGiven": 500000,
+#     "averageOrderValue": 100000,
+#     "details": {
+#       "month": 11,
+#       "year": 2024,
+#       "startDate": "2024-11-01T00:00:00.000Z",
+#       "endDate": "2024-11-30T23:59:59.999Z",
+#       "orders": ["order_id_1", "order_id_2"]
+#     }
+#   }
+# }
+
+### 2. Thống kê doanh thu theo giờ
+GET http://localhost:3000/reports/hourly?date=2024-11-28
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": [
+#     {
+#       "hour": 0,
+#       "revenue": 0,
+#       "orders": 0,
+#       "discount": 0
+#     },
+#     {
+#       "hour": 11,
+#       "revenue": 500000,
+#       "orders": 5,
+#       "discount": 25000
+#     },
+#     {
+#       "hour": 12,
+#       "revenue": 800000,
+#       "orders": 8,
+#       "discount": 40000
+#     },
+#     {
+#       "hour": 18,
+#       "revenue": 1200000,
+#       "orders": 12,
+#       "discount": 60000
+#     }
+#   ],
+#   "date": "2024-11-28"
+# }
+
+### 3. Lấy giờ cao điểm
+GET http://localhost:3000/reports/peak-hours?startDate=2024-11-01&endDate=2024-11-30
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": {
+#     "peakHours": [
+#       {
+#         "hour": 18,
+#         "revenue": 5000000,
+#         "orders": 50
+#       },
+#       {
+#         "hour": 19,
+#         "revenue": 4500000,
+#         "orders": 45
+#       },
+#       {
+#         "hour": 12,
+#         "revenue": 4000000,
+#         "orders": 40
+#       },
+#       {
+#         "hour": 13,
+#         "revenue": 3500000,
+#         "orders": 35
+#       },
+#       {
+#         "hour": 20,
+#         "revenue": 3000000,
+#         "orders": 30
+#       }
+#     ],
+#     "lowHours": [
+#       {
+#         "hour": 3,
+#         "revenue": 0,
+#         "orders": 0
+#       },
+#       {
+#         "hour": 4,
+#         "revenue": 0,
+#         "orders": 0
+#       },
+#       {
+#         "hour": 5,
+#         "revenue": 50000,
+#         "orders": 1
+#       }
+#     ],
+#     "allHours": []
+#   },
+#   "period": {
+#     "startDate": "2024-11-01T00:00:00.000Z",
+#     "endDate": "2024-11-30T23:59:59.999Z"
+#   }
+# }
+
+### 4. Thống kê theo khoảng thời gian
+GET http://localhost:3000/reports/date-range?startDate=2024-11-01&endDate=2024-11-30
+# Response mẫu:
+# {
+#   "success": true,
+#   "data": {
+#     "summary": {
+#       "totalRevenue": 15000000,
+#       "totalOrders": 150,
+#       "totalDiscountGiven": 500000,
+#       "averageOrderValue": 100000
+#     },
+#     "dailyBreakdown": [
+#       {
+#         "date": "2024-11-01",
+#         "revenue": 500000,
+#         "orders": 5,
+#         "discount": 25000
+#       },
+#       {
+#         "date": "2024-11-02",
+#         "revenue": 600000,
+#         "orders": 6,
+#         "discount": 30000
+#       }
+#     ]
+#   },
+#   "period": {
+#     "startDate": "2024-11-01T00:00:00.000Z",
+#     "endDate": "2024-11-30T23:59:59.999Z"
+#   }
+# }

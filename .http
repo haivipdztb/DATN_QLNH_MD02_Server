@@ -12,9 +12,9 @@ POST {{userApi}}
 Content-Type: application/json
 
 {
-  "username": "testuser_staff",
+  "username": "admin2",
   "password": "password123",
-  "role": "staff",
+  "role": "admin",
   "name": "Nhân Viên Test",
   "phoneNumber": "0912345678",
   "email": "staff@example.com"

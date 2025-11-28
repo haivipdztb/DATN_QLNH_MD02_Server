@@ -99,7 +99,7 @@ exports.createUser = async (req, res) => {
 =============================== */
 exports.updateUser = async (req, res) => {
   try {
-    const {username, name, phoneNumber, email, role, isActive, password } = req.body;
+    const { username, name, phoneNumber, email, role, isActive, password } = req.body;
 
     const updateData = {
       name,
