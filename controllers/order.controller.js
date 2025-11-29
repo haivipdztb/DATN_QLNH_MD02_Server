@@ -3,6 +3,8 @@ const { orderModel } = require('../model/order.model');
 const { menuModel } = require('../model/menu.model'); 
 const { tableModel } = require('../model/table.model');
 const { Revenue } = require('../model/revenue.model'); 
+const { History } = require('../model/history.model');
+const { reportModel } = require('../model/report.model');
 
 
 
@@ -92,7 +94,7 @@ function populateOrderQuery(query) {
  */
 exports.getAllOrders = async (req, res) => {
   try {
-    const filter = {orderStatus: { $ne: 'paid' }};
+   const filter = {};
     if (req.query && typeof req.query.tableNumber !== 'undefined' && req.query.tableNumber !== '') {
       const tn = Number(req.query.tableNumber);
       if (!isNaN(tn)) filter.tableNumber = tn;
@@ -144,29 +146,16 @@ exports.getOrderById = async (req, res) => {
  * Emits both a global broadcast and a room-specific event (room name "table_<tableNumber>").
  */
 function emitOrderEvent(req, eventName, payload) {
-  try {
-    // if express app saved io instance, use it
-    const io = req && req.app ? req.app.get('io') : null;
-    if (io) {
-      // broadcast to all connected clients
-      io.emit(eventName, payload);
-      // if payload contains tableNumber, emit to table room too
-      if (payload && (typeof payload.tableNumber !== 'undefined' || payload.tableNumber === 0)) {
-        const tn = payload.tableNumber;
-        try {
-          io.to(`table_${tn}`).emit(eventName, payload);
-        } catch (e) {
-          // ignore room emit errors
-        }
-      }
-    } else {
-      // no io attached to app - optional: log for debugging
-      console.warn('emitOrderEvent: io not found on req.app; skipping socket emit for', eventName);
-    }
-  } catch (e) {
-    console.warn('emitOrderEvent error:', e && e.message);
+  const io = req?.app?.get('io');
+  if (!io) return;
+
+  io.emit(eventName, payload);
+
+  if (payload?.tableNumber !== undefined) {
+    io.to(`table_${payload.tableNumber}`).emit(eventName, payload);
   }
 }
+
 
 /**
  * POST /orders
@@ -352,28 +341,25 @@ function normalizePaymentMethod(pm) {
 async function resetTableAfterPayment(tableNumber) {
   if (tableNumber === undefined || tableNumber === null) return null;
 
-  try {
-    const updatedTable = await tableModel.findOneAndUpdate(
-      { tableNumber: Number(tableNumber) },
-      { status: 'available', currentOrder: null, updatedAt: Date.now() },
-      { new: true }
-    );
-    console.log('resetTableAfterPayment - updated table:', updatedTable);
-    return updatedTable;
-  } catch (err) {
-    console.error('resetTableAfterPayment error:', err);
-    return null;
-  }
+  const updatedTable = await tableModel.findOneAndUpdate(
+    { tableNumber },
+    { status: 'available', currentOrder: null, updatedAt: Date.now() },
+    { new: true }
+  );
+
+  return updatedTable;
 }
+
 
 /**
  * POST /orders/pay
  */
+
 exports.payOrder = async (req, res) => {
   console.log('--- payOrder called ---', req.body);
 
   try {
-    const { orderId, paidAmount, paymentMethod } = req.body;
+    const { orderId, paidAmount, paymentMethod, cashier } = req.body;
     if (!orderId) return res.status(400).json({ success: false, message: 'Order id is required' });
 
     const order = await orderModel.findById(orderId);
@@ -384,45 +370,78 @@ exports.payOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Thanh toán thất bại: số tiền không hợp lệ' });
     }
 
-    // --- Cập nhật order ---
-    order.paidAmount = paid;
-    order.change = paid - order.finalAmount;
-    order.orderStatus = 'paid';
-    order.paidAt = new Date();
-    order.paymentMethod = paymentMethod || 'Tiền mặt';
-    order.isArchived = true; // ẩn khỏi bàn
-    await order.save();
-    console.log('Order saved:', order);
-
-    // --- Lưu doanh thu ---
+    // --- Lưu vào Revenue ---
     const revenue = new Revenue({
       orderId: order._id,
       tableNumber: order.tableNumber,
       amount: order.finalAmount,
-      paymentMethod: order.paymentMethod,
-      paidAt: order.paidAt
+      paymentMethod: paymentMethod || 'Tiền mặt',
+      paidAt: new Date()
     });
     await revenue.save();
-    console.log('Revenue saved:', revenue);
+
+    // --- Tạo History ---
+    const history = new History({
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      action: 'pay',
+      performedBy: cashier || 'unknown',
+      details: {
+        items: order.items,
+        totalAmount: order.totalAmount,
+        finalAmount: order.finalAmount,
+        paymentMethod: paymentMethod || 'Tiền mặt',
+        paidAt: revenue.paidAt
+      }
+    });
+    await history.save();
+
+    // --- Xóa order khỏi active orders ---
+    await orderModel.findByIdAndDelete(orderId);
 
     // --- Reset bàn ---
     let tableReset = null;
     if (order.tableNumber !== undefined && order.tableNumber !== null) {
-      tableReset = await resetTableAfterPayment(order.tableNumber);
+      tableReset = await tableModel.findOneAndUpdate(
+        { tableNumber: order.tableNumber },
+        { status: 'available', currentOrder: null, updatedAt: Date.now() },
+        { new: true }
+      );
     }
 
-    // --- Emit socket event ---
+    // --- Cập nhật báo cáo ngày ---
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let dailyReport = await reportModel.findOne({ reportType: 'daily_sales', date: today });
+    if (dailyReport) {
+      // Cập nhật các giá trị
+      dailyReport.totalRevenue += order.finalAmount;
+      dailyReport.totalOrders += 1;
+      dailyReport.totalDiscountGiven += order.discount || 0;
+      dailyReport.averageOrderValue = dailyReport.totalRevenue / dailyReport.totalOrders;
+      dailyReport.details.orders.push(order._id);
+    } else {
+      // Tạo báo cáo mới nếu chưa có
+      dailyReport = new reportModel({
+        reportType: 'daily_sales',
+        date: today,
+        timeFrame: 'Day',
+        totalRevenue: order.finalAmount,
+        totalOrders: 1,
+        totalDiscountGiven: order.discount || 0,
+        averageOrderValue: order.finalAmount,
+        details: { orders: [order._id] }
+      });
+    }
+    await dailyReport.save();
+
+    // --- Emit realtime ---
     const io = req.app?.get('io');
     if (io) {
-      // Broadcast cho tất cả client
-      io.emit('order_paid', order);
+      io.emit('order_paid', { tableNumber: order.tableNumber });
+      io.to(`table_${order.tableNumber}`).emit('order_paid', { tableNumber: order.tableNumber });
 
-      // Emit cho room bàn cụ thể
-      if (order.tableNumber !== undefined && order.tableNumber !== null) {
-        io.to(`table_${order.tableNumber}`).emit('order_paid', order);
-      }
-
-      // Emit cập nhật trạng thái bàn
       if (tableReset) {
         io.emit('table_updated', tableReset);
         io.to(`table_${tableReset.tableNumber}`).emit('table_updated', tableReset);
@@ -432,14 +451,14 @@ exports.payOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Thanh toán thành công',
-      data: { order, table: tableReset }
+      data: { table: tableReset, revenue, history, dailyReport }
     });
+
   } catch (err) {
     console.error('payOrder error:', err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 
 exports.getPaidOrders = async (req, res) => {
