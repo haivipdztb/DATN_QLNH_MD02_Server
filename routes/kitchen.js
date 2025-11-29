@@ -23,4 +23,10 @@ router.patch('/orders/:orderId/items/:itemId/status', kitchenController.updateIt
 // Cập nhật trạng thái tất cả món trong order
 router.patch('/orders/:orderId/items/status', kitchenController.updateAllItemsStatus);
 
+// Nhân viên phục vụ gửi yêu cầu hủy món (chuyển status thành cancel_requested)
+router.post('/orders/:orderId/items/:itemId/request-cancel', kitchenController.requestCancelDish);
+
+// Bếp hủy món (do khách đợi lâu không muốn nữa)
+router.post('/orders/:orderId/items/:itemId/cancel', kitchenController.cancelDish);
+
 module.exports = router;

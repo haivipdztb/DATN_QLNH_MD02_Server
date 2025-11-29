@@ -21,10 +21,13 @@ const orderSchema = new db.mongoose.Schema(
 
         status: {
           type: String,
-          enum: ['pending', 'preparing', 'ready', 'soldout'],
+          enum: ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested'],
           default: 'pending'
-        }, // Trạng thái món: chờ, đang làm, sẵn sàng, hết món
+        }, // Trạng thái món: chờ, đang làm, sẵn sàng, hết món, yêu cầu hủy
 
+        cancelRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu hủy
+        cancelRequestedAt: { type: Date }, // Thời gian yêu cầu hủy
+        cancelReason: { type: String, default: '' }, // Lý do yêu cầu hủy
         note: { type: String, default: '' } // Ghi chú đặc biệt cho món
       }
     ],
@@ -34,7 +37,14 @@ const orderSchema = new db.mongoose.Schema(
     paidAmount: { type: Number, default: 0 },
     change: { type: Number, default: 0 },
     paymentMethod: { type: String, required: true },
-    orderStatus: { type: String, required: true, default: 'pending' },
+    orderStatus: { 
+      type: String, 
+      required: true, 
+      default: 'pending',
+      enum: ['pending', 'temp_calculation', 'confirmed', 'paid', 'cancelled']
+    }, // pending: chờ xử lý, temp_calculation: tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
+    tempCalculationRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu tạm tính
+    tempCalculationRequestedAt: { type: Date }, // Thời gian yêu cầu tạm tính
     cancelReason: { type: String }, // Lý do hủy đơn
     cancelledAt: { type: Date }, // Thời gian hủy
     mergedFrom: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],

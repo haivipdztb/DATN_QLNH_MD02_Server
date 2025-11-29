@@ -20,6 +20,9 @@ router.put('/:id', orderController.updateOrder);
 // DELETE - Xóa order theo ID
 router.delete('/:id', orderController.deleteOrder);
 
+// POST - Yêu cầu tạm tính: chuyển order sang trạng thái "hóa đơn tạm tính" và gửi thông báo cho thu ngân
+router.post('/:id/request-temp-calculation', orderController.requestTempCalculation);
+
 router.patch('/:orderId/items/:itemId/status', kitchenController.updateItemStatus);
 
 

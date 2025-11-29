@@ -93,6 +93,11 @@ exports.getAllOrders = async (req, res) => {
       if (!isNaN(tn)) filter.tableNumber = tn;
       else filter.tableNumber = req.query.tableNumber;
     }
+    
+    // Filter theo orderStatus nếu có
+    if (req.query && req.query.orderStatus) {
+      filter.orderStatus = req.query.orderStatus;
+    }
 
     let query = orderModel.find(filter).sort({ createdAt: -1 });
     query = populateOrderQuery(query);
@@ -302,6 +307,72 @@ exports.deleteOrder = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi xóa order',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * POST /orders/:id/request-temp-calculation
+ * Chuyển order sang trạng thái "hóa đơn tạm tính" và gửi thông báo cho thu ngân
+ */
+exports.requestTempCalculation = async (req, res) => {
+  try {
+    const { requestedBy } = req.body; // ID nhân viên yêu cầu tạm tính
+    const orderId = req.params.id;
+
+    // Tìm và cập nhật order
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+
+    // Kiểm tra trạng thái order
+    if (order.orderStatus === 'paid') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Order đã thanh toán, không thể yêu cầu tạm tính' 
+      });
+    }
+
+    if (order.orderStatus === 'cancelled') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Order đã bị hủy, không thể yêu cầu tạm tính' 
+      });
+    }
+
+    // Cập nhật trạng thái sang temp_calculation
+    order.orderStatus = 'temp_calculation';
+    order.tempCalculationRequestedBy = requestedBy || null;
+    order.tempCalculationRequestedAt = new Date();
+    await order.save();
+
+    // Populate để lấy đầy đủ thông tin
+    let query = orderModel.findById(order._id);
+    query = populateOrderQuery(query);
+    query = query.populate('tempCalculationRequestedBy', 'name username');
+    const populated = await query.lean().exec();
+
+    // Emit Socket.IO event cho thu ngân
+    emitOrderEvent(req, 'temp_calculation_requested', {
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      order: populated,
+      requestedBy: requestedBy,
+      requestedAt: order.tempCalculationRequestedAt
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã chuyển sang trạng thái hóa đơn tạm tính và gửi thông báo cho thu ngân',
+      data: populated
+    });
+  } catch (error) {
+    console.error('requestTempCalculation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi yêu cầu tạm tính',
       error: error.message
     });
   }
