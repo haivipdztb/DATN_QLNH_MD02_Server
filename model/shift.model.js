@@ -1,5 +1,6 @@
 const db = require('./db');
 
+<<<<<<< HEAD
 // Định nghĩa schema cho shift (ca làm việc)
 const shiftSchema = new db.mongoose.Schema(
     {
@@ -48,4 +49,16 @@ shiftSchema.pre('save', function (next) {
 // Tạo model
 let shiftModel = db.mongoose.model('shiftModel', shiftSchema);
 
+=======
+const shiftSchema = new db.mongoose.Schema({
+  shiftName: { type: String, required: true },
+  startTime: { type: String, required: true }, // HH:mm
+  endTime: { type: String, required: true },   // HH:mm
+  description: { type: String }
+}, {
+  collection: 'shifts'
+});
+
+const shiftModel = db.mongoose.model('shiftModel', shiftSchema);
+>>>>>>> 8948e5f (update server cn: phân ca, chấm công, tính lương)
 module.exports = { shiftModel };

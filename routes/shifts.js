@@ -27,4 +27,7 @@ router.put('/:id', shiftController.updateShift);
 // DELETE - Xóa ca làm việc
 router.delete('/:id', shiftController.deleteShift);
 
+router.post('/', shiftController.createShift);
+router.get('/', shiftController.getAllShifts);
+
 module.exports = router;

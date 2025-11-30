@@ -23,7 +23,10 @@ router.delete('/:id', orderController.deleteOrder);
 // POST - Yêu cầu tạm tính: chuyển order sang trạng thái "hóa đơn tạm tính" và gửi thông báo cho thu ngân
 router.post('/:id/request-temp-calculation', orderController.requestTempCalculation);
 
+// PATCH cập nhật trạng thái món (đã có)
 router.patch('/:orderId/items/:itemId/status', kitchenController.updateItemStatus);
 
+// NEW: route để phục vụ yêu cầu hủy món (phục vụ gửi yêu cầu lên bếp kèm lý do)
+router.post('/:orderId/items/:itemId/request-cancel', kitchenController.requestCancelDish);
 
 module.exports = router;
