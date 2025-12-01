@@ -1,0 +1,77 @@
+# Định nghĩa biến môi trường (thay đổi port 3000 nếu cần)
+@baseUrl = http://localhost:3000
+@userApi = {{baseUrl}}/users
+
+# Biến này sẽ tự động lưu token sau khi đăng nhập
+@token = 
+
+### ===========================================
+### 1. Tạo User mới (Đăng ký)
+### ===========================================
+POST {{userApi}}
+Content-Type: application/json
+
+{
+  "username": "admin2",
+  "password": "password123",
+  "role": "admin",
+  "name": "Nhân Viên Test",
+  "phoneNumber": "0912345678",
+  "email": "staff@example.com"
+}
+
+### ===========================================
+### 2. Đăng nhập User (Lấy Token)
+### ===========================================
+# Dòng @name dùng để đặt tên cho request
+# Dòng "token = ..." sẽ tự động lấy 'token' từ body response
+# và gán vào biến @token ở trên
+# @name loginRequest
+
+POST {{userApi}}/login
+Content-Type: application/json
+
+{
+  "username": "testuser_staff",
+  "password": "password123"
+}
+
+
+### ===========================================
+### 3. Lấy danh sách tất cả Users
+### (Yêu cầu token)
+### ===========================================
+GET {{userApi}}
+Authorization: Bearer {{token}}
+
+### ===========================================
+### 4. Lấy chi tiết một User
+### (Yêu cầu token)
+### ===========================================
+# Thay 'your_user_id' bằng ID thật bạn lấy được từ response đăng nhập
+# hoặc response "Tạo User mới"
+GET {{userApi}}/your_user_id
+Authorization: Bearer {{token}}
+
+### ===========================================
+### 5. Cập nhật User
+### (Yêu cầu token)
+### ===========================================
+# Thay 'your_user_id' bằng ID thật
+PUT {{userApi}}/your_user_id
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Tên Đã Được Cập Nhật",
+  "phoneNumber": "0987654321",
+  "isActive": false
+}
+
+### ===========================================
+### 6. Xóa User
+### (Yêu cầu token)
+### ===========================================
+# Thay 'your_user_id' bằng ID thật
+DELETE {{userApi}}/your_user_id
+Authorization: Bearer {{token}}

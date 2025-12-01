@@ -1,9 +1,10 @@
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
+var cors = require('cors');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
-const cors = require('cors');
+require('dotenv').config();
 const app = express();
 
 // Kết nối database
@@ -18,12 +19,17 @@ var tablesRouter = require('./routes/tables');
 var kitchenRouter = require('./routes/kitchen');
 var cashierRouter = require('./routes/cashier');
 var ingredientsRouter = require('./routes/ingredients');
+var vouchersRouter = require('./routes/vouchers');
+var shiftsRouter = require('./routes/shifts');
+var salaryRouter = require('./routes/salary');
 var attendanceRouter = require('./routes/attendance');
 var shiftsRouter = require('./routes/shifts');
 var shiftAssignmentsRouter = require('./routes/shiftAssignments');
 var payrollRouter = require('./routes/payroll');
 
-
+var attendanceRouter = require('./routes/attendance');
+var shiftAssignmentsRouter = require('./routes/shiftAssignments');
+var payrollRouter = require('./routes/payroll');
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -39,34 +45,36 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 
-
-//===================// ================//////
+//=================== ROUTES ==================//
 app.use('/users', usersRouter);
 app.use('/menu', menuRouter);
 app.use('/orders', ordersRouter);
-app.use('/reports', reportsRouter); 
+app.use('/reports', reportsRouter);
 app.use('/tables', tablesRouter);
 app.use('/kitchen', kitchenRouter);
 app.use('/cashier', cashierRouter);
 app.use('/ingredients', ingredientsRouter);
+app.use('/vouchers', vouchersRouter);
+app.use('/shifts', shiftsRouter);
+app.use('/salary', salaryRouter);
 app.use('/attendance', attendanceRouter);
 app.use('/shifts', shiftsRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);
 app.use('/payroll', payrollRouter); 
 
+app.use('/attendance', attendanceRouter);
+app.use('/shift-assignments', shiftAssignmentsRouter);
+app.use('/payroll', payrollRouter);
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   next(createError(404));
 });
 
 // error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
+app.use(function (err, req, res, next) {
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
   res.status(err.status || 500);
   res.render('error');
 });

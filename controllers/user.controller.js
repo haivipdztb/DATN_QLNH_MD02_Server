@@ -1,141 +1,233 @@
-const { userModel } = require('../model/user.model');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-/* ============================
-   LẤY DS USERS
-=============================== */
+const { userModel } = require("../model/user.model");
+const bcrypt = require("bcryptjs"); // Thêm
+const jwt = require("jsonwebtoken"); // Thêm
+// Xem danh sách tất cả users
 exports.getAllUsers = async (req, res) => {
-    try {
-        const users = await userModel.find().select('-password');
-        res.status(200).json({ success: true, data: users });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Lỗi lấy danh sách', error: error.message });
-    }
+  try {
+    const users = await userModel.find().select("-password");
+    res.status(200).json({
+      success: true,
+      data: users,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách users",
+      error: error.message,
+    });
+  }
 };
 
 /* ============================
    LẤY USER THEO ID
 =============================== */
 exports.getUserById = async (req, res) => {
-    try {
-        const user = await userModel.findById(req.params.id).select('-password');
-        if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy user' });
-
-        res.status(200).json({ success: true, data: user });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Lỗi chi tiết user', error: error.message });
+  try {
+    const user = await userModel.findById(req.params.id).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy user",
+      });
     }
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy chi tiết user",
+      error: error.message,
+    });
+  }
 };
 
 /* ============================
    TẠO USER (CÓ HASH PASSWORD)
 =============================== */
 exports.createUser = async (req, res) => {
-    try {
-        const { username, password, role, name, phoneNumber, email } = req.body;
+  try {
+    const { username, password, role, name, phoneNumber, email, isActive } =
+      req.body;
 
-        const existing = await userModel.findOne({ username });
-        if (existing) return res.status(400).json({ message: 'Username đã tồn tại!' });
-
-        // Hash password trước khi lưu
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = new userModel({
-            username,
-            password: hashedPassword,
-            role,
-            name,
-            phoneNumber,
-            email,
-            isActive: true
-        });
-
-        await newUser.save();
-
-        const result = newUser.toObject();
-        delete result.password;
-
-        res.status(201).json({ success: true, message: 'Tạo user thành công', data: result });
-    } catch (error) {
-        res.status(500).json({ message: 'Lỗi tạo user', error: error.message });
+    // Kiểm tra username đã tồn tại chưa
+    const existingUser = await userModel.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Username đã tồn tại",
+      });
     }
+
+    // Mã hóa password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const newUser = new userModel({
+      username,
+      password: hashedPassword, // Lưu password đã mã hóa
+      role,
+      name,
+      phoneNumber,
+      email,
+      isActive: isActive !== undefined ? isActive : true,
+    });
+
+    await newUser.save();
+
+    // Không trả về password
+    const userResponse = newUser.toObject();
+    delete userResponse.password;
+
+    res.status(201).json({
+      success: true,
+      message: "Tạo user thành công",
+      data: userResponse,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi tạo user",
+      error: error.message,
+    });
+  }
 };
 
 /* ============================
    UPDATE USER (HASH PASSWORD)
 =============================== */
 exports.updateUser = async (req, res) => {
-    try {
-        const { name, phoneNumber, email, role, isActive, password } = req.body;
+  try {
+    const { username, name, phoneNumber, email, role, isActive, password } = req.body;
 
-        const updateData = { name, phoneNumber, email, role, isActive };
+    const updateData = {
+      name,
+      phoneNumber,
+      email,
+      role,
+      isActive,
+      username
+    };
 
-        if (password) {
-            updateData.password = await bcrypt.hash(password, 10);
-        }
-
-        const updatedUser = await userModel.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true }
-        ).select('-password');
-
-        if (!updatedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
-
-        res.status(200).json({ success: true, message: 'Cập nhật thành công', data: updatedUser });
-
-    } catch (error) {
-        res.status(500).json({ message: 'Lỗi cập nhật user', error: error.message });
+    // Nếu có cập nhật password, mã hóa nó
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
     }
+
+    const updatedUser = await userModel
+      .findByIdAndUpdate(req.params.id, updateData, {
+        new: true,
+        runValidators: true,
+      })
+      .select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy user",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Cập nhật user thành công",
+      data: updatedUser,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi cập nhật user",
+      error: error.message,
+    });
+  }
 };
 
 /* ============================
    XÓA USER
 =============================== */
 exports.deleteUser = async (req, res) => {
-    try {
-        const deletedUser = await userModel.findByIdAndDelete(req.params.id).select('-password');
-        if (!deletedUser) return res.status(404).json({ message: 'Không tìm thấy user' });
-
-        res.status(200).json({ success: true, message: 'Xóa thành công', data: deletedUser });
-    } catch (error) {
-        res.status(500).json({ message: 'Lỗi xóa user', error: error.message });
+  try {
+    const deletedUser = await userModel
+      .findByIdAndDelete(req.params.id)
+      .select("-password");
+    if (!deletedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy user",
+      });
     }
+    res.status(200).json({
+      success: true,
+      message: "Xóa user thành công",
+      data: deletedUser,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi xóa user",
+      error: error.message,
+    });
+  }
 };
 
-/* ============================
-   LOGIN (SỬA: DÙNG username)
-=============================== */
 exports.loginUser = async (req, res) => {
-    try {
-        const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-        if (!username || !password)
-            return res.status(400).json({ message: "Username và password là bắt buộc!" });
+    // 1. Kiểm tra username có tồn tại không
+    const user = await userModel.findOne({ username });
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Sai username hoặc password", // Thông báo chung
+      });
+    }
 
-        const user = await userModel.findOne({ username });
-        if (!user) return res.status(404).json({ message: "Không tìm thấy user!" });
+    // 2. So sánh password (password người dùng gửi vs password đã hash trong DB)
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Sai username hoặc password",
+      });
+    }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ message: "Sai mật khẩu!" });
+    // 3. Nếu đúng, tạo JWT payload
+    const payload = {
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+    };
 
-        const token = jwt.sign(
-            { id: user._id, role: user.role },
-            process.env.JWT_SECRET || "secret123",
-            { expiresIn: "7d" }
-        );
+    // 4. Ký và tạo token
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET, // Lấy từ file .env
+      { expiresIn: "7d" }, // Token hết hạn sau 7 ngày
+      (err, token) => {
+        if (err) throw err;
 
-        const safeUser = user.toObject();
-        delete safeUser.password;
+        // 5. Trả về token và thông tin user (loại bỏ password)
+        const userResponse = user.toObject();
+        delete userResponse.password;
 
         return res.status(200).json({
-            message: "Đăng nhập thành công!",
-            user: safeUser,
-            token
+          success: true,
+          message: "Đăng nhập thành công",
+          token: token,
+          user: userResponse,
         });
-
-    } catch (error) {
-        res.status(500).json({ message: "Lỗi server", error: error.message });
-    }
+      }
+    );
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi server khi đăng nhập",
+      error: error.message,
+    });
+  }
 };

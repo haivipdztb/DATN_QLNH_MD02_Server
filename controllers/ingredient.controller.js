@@ -6,7 +6,7 @@ exports.getAllIngredients = async (req, res) => {
   try {
     const { status, tag } = req.query;
     const filter = {};
-    
+
     if (status) filter.status = status;
     if (tag) filter.tag = tag;
 
@@ -16,10 +16,10 @@ exports.getAllIngredients = async (req, res) => {
       .lean()
       .exec();
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       data: ingredients,
-      count: ingredients.length 
+      count: ingredients.length
     });
   } catch (error) {
     console.error('getAllIngredients error:', error);
@@ -37,15 +37,15 @@ exports.getIngredientById = async (req, res) => {
     const ingredient = await ingredientModel.findById(req.params.id).lean().exec();
 
     if (!ingredient) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Không tìm thấy nguyên liệu' 
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy nguyên liệu'
       });
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      data: ingredient 
+    return res.status(200).json({
+      success: true,
+      data: ingredient
     });
   } catch (error) {
     console.error('getIngredientById error:', error);
@@ -60,19 +60,34 @@ exports.getIngredientById = async (req, res) => {
 // Tạo nguyên liệu mới (Admin)
 exports.createIngredient = async (req, res) => {
   try {
-    const { name, tag, unit, quantity, minQuantity, image, description, supplier } = req.body;
-
-    const newIngredient = new ingredientModel({
+    const {
       name,
       tag,
       unit,
-      quantity: quantity || 0,
-      minQuantity: minQuantity || 5,
+      quantity,
+      minQuantity,
       image,
       description,
       supplier,
+      minThreshold,
+      importPrice,
+      category
+    } = req.body;
+
+        const newIngredient = new ingredientModel({
+      name,
+      tag,
+      unit,
+      quantity,
+      minQuantity,
+      image,
+      description,
+      supplier,
+      minThreshold,
+      importPrice,
+      category,
       lastRestocked: quantity > 0 ? new Date() : null
-    });
+        });
 
     const saved = await newIngredient.save();
 
@@ -118,7 +133,7 @@ exports.takeIngredient = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Không đủ nguyên liệu. Chỉ còn ${ingredient.quantity} ${ingredient.unit}`,
-        data: { 
+        data: {
           available: ingredient.quantity,
           requested: amount,
           unit: ingredient.unit
@@ -128,7 +143,7 @@ exports.takeIngredient = async (req, res) => {
 
     // Trừ số lượng
     ingredient.quantity -= amount;
-    
+
     // Middleware sẽ tự động cập nhật status
     await ingredient.save();
 
@@ -192,7 +207,6 @@ exports.restockIngredient = async (req, res) => {
     // Cộng số lượng
     ingredient.quantity += amount;
     ingredient.lastRestocked = new Date();
-    
     await ingredient.save();
 
     return res.status(200).json({
@@ -209,11 +223,40 @@ exports.restockIngredient = async (req, res) => {
     });
   }
 };
-
+// {
+//         "minThreshold": 5,
+//         "importPrice": 0,
+//         "_id": "69233fc9294b4d25676cd879",
+//         "name": "Hàu",
+//         "tag": "hai_san",
+//         "unit": "kg",
+//         "quantity": 19,
+//         "minQuantity": 10,
+//         "status": "out_of_stock",
+//         "image": "https://example.com/thit-bo.jpg",
+//         "description": "Thịt bò tươi nhập khẩu",
+//         "supplier": "Công ty ABC D",
+//         "lastRestocked": "2025-11-23T17:09:29.317Z",
+//         "createdAt": "2025-11-23T17:09:29.318Z",
+//         "updatedAt": "2025-11-28T09:01:36.814Z",
+//         "__v": 0
+//     }
 // Cập nhật thông tin nguyên liệu (Admin)
 exports.updateIngredient = async (req, res) => {
   try {
-    const { name, tag, unit, quantity, minQuantity, image, description, supplier } = req.body;
+    const {
+      name,
+      tag,
+      unit,
+      quantity,
+      minQuantity,
+      image,
+      description,
+      supplier,
+      minThreshold,
+      importPrice,
+      category
+    } = req.body;
 
     const updated = await ingredientModel.findByIdAndUpdate(
       req.params.id,
@@ -226,6 +269,9 @@ exports.updateIngredient = async (req, res) => {
         image,
         description,
         supplier,
+        minThreshold,
+        importPrice,
+        category,
         updatedAt: new Date()
       },
       { new: true, runValidators: true }
@@ -284,8 +330,8 @@ exports.deleteIngredient = async (req, res) => {
 exports.getWarningIngredients = async (req, res) => {
   try {
     const warnings = await ingredientModel
-      .find({ 
-        status: { $in: ['low_stock', 'out_of_stock'] } 
+      .find({
+        status: { $in: ['low_stock', 'out_of_stock'] }
       })
       .sort({ quantity: 1, name: 1 })
       .lean()
