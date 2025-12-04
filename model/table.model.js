@@ -17,8 +17,8 @@ const tableSchema = new db.mongoose.Schema(
             default: null
         }, // ID của order hiện tại (nếu có)
         location: {type: String, required: false}, // Vị trí bàn (tầng 1, tầng 2, ngoài trời...)
-        createdAt: {type: Date, default: Date.now},
-        updatedAt: {type: Date, default: Date.now}
+        createdAt: {type: Date, default: () => new Date()},
+        updatedAt: {type: Date, default: () => new Date()}
     },
     {
         collection: 'tables' // Tên collection trong database

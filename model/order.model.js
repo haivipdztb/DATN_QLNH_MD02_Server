@@ -49,7 +49,7 @@ const orderSchema = new db.mongoose.Schema(
     cancelledAt: { type: Date }, // Thời gian hủy
     mergedFrom: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
     splitTo: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
-    createdAt: { type: Date, default: Date.now },
+    createdAt: { type: Date, default: () => new Date() },
     paidAt: { type: Date }
   },
   {

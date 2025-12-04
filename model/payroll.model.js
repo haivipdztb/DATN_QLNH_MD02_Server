@@ -6,7 +6,7 @@ const payrollSchema = new db.mongoose.Schema({
   totalHours: { type: Number, default: 0 },
   totalSalary: { type: Number, default: 0 },
   details: { type: Object }, // salaryDetails object
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: () => new Date() }
 }, {
   collection: 'payrolls'
 });

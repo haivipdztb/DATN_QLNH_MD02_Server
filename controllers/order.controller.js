@@ -345,7 +345,7 @@ exports.requestTempCalculation = async (req, res) => {
     // Cập nhật trạng thái sang temp_calculation
     order.orderStatus = 'temp_calculation';
     order.tempCalculationRequestedBy = requestedBy || null;
-    order.tempCalculationRequestedAt = new Date();
+    order.tempCalculationRequestedAt = new Date(); // Đã đúng thời gian thực
     await order.save();
 
     // Populate để lấy đầy đủ thông tin

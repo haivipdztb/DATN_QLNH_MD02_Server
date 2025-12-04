@@ -1,5 +1,15 @@
 const { tableModel } = require("../model/table.model");
 
+// Helper to emit socket events safely
+function emitIo(req, eventName, payload) {
+    try {
+        const io = req.app && req.app.get ? req.app.get('io') : null;
+        if (io) io.emit(eventName, payload);
+    } catch (e) {
+        // ignore socket errors
+    }
+}
+
 // Lấy danh sách tất cả các bàn
 exports.getAllTables = async (req, res) => {
     try {
@@ -17,131 +27,160 @@ exports.getAllTables = async (req, res) => {
     }
 };
 
-// Lấy chi tiết một bàn theo ID
-exports.getTableById = async (req, res) => {
-  try {
-    const table = await tableModel
-      .findById(req.params.id)
-      .populate("currentOrder");
-    if (!table) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy bàn",
-      });
-    }
-    return res.status(200).json({
-      success: true,
-      data: table,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi khi lấy chi tiết bàn",
-      error: error.message,
-    });
-  }
-};
-
-// Lấy danh sách bàn theo trạng thái
-exports.getTablesByStatus = async (req, res) => {
-  try {
-    const { status } = req.params;
-    const tables = await tableModel.find({ status }).populate("currentOrder");
-    return res.status(200).json({
-      success: true,
-      data: tables,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi khi lấy danh sách bàn theo trạng thái",
-      error: error.message,
-    });
-  }
-};
-
-// Thêm bàn mới
-exports.createTable = async (req, res) => {
-  try {
-    const { tableNumber, capacity, location, status } = req.body;
-    const newTable = new tableModel({
-      tableNumber,
-      capacity,
-      location,
-      status: status || "available",
-    });
-    await newTable.save();
-    return res.status(201).json({
-      success: true,
-      message: "Thêm bàn thành công",
-      data: newTable,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi khi thêm bàn",
-      error: error.message,
-    });
-  }
-};
-
 // Cập nhật thông tin bàn
 exports.updateTable = async (req, res) => {
-  try {
-    const { tableNumber, capacity, location, status, currentOrder } = req.body;
-    const updatedTable = await tableModel.findByIdAndUpdate(
-      req.params.id,
-      { tableNumber, capacity, location, status, currentOrder },
-      { new: true, runValidators: true }
-    );
-    if (!updatedTable) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy bàn",
-      });
+    try {
+        const {tableNumber, capacity, location, status, currentOrder, reservationName, reservationPhone, reservationAt} = req.body;
+        const updatedTable = await tableModel.findByIdAndUpdate(
+            req.params.id,
+            {tableNumber, capacity, location, status, currentOrder, reservationName, reservationPhone, reservationAt, updatedAt: new Date()},
+            {new: true, runValidators: true}
+        );
+        if (!updatedTable) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy bàn'
+            });
+        }
+
+        // Emit status changed event
+        emitIo(req, 'table_status_changed', {
+            tableId: updatedTable._id,
+            tableNumber: updatedTable.tableNumber,
+            status: updatedTable.status,
+            updatedAt: updatedTable.updatedAt
+        });
+
+        // If updated to reserved, schedule auto-release after 20s
+        if (updatedTable.status === 'reserved') {
+            emitIo(req, 'table_reserved', {
+                tableId: updatedTable._id,
+                tableNumber: updatedTable.tableNumber,
+                status: 'reserved',
+                updatedAt: updatedTable.updatedAt
+            });
+
+            const id = req.params.id;
+            setTimeout(async () => {
+                try {
+                    const latest = await tableModel.findById(id);
+                    if (latest && latest.status === 'reserved') {
+                        latest.status = 'available';
+                        latest.updatedAt = new Date();
+                        // clear reservation fields if exist
+                        if (latest.reservationName) latest.reservationName = '';
+                        if (latest.reservationPhone) latest.reservationPhone = '';
+                        if (latest.reservationAt) latest.reservationAt = '';
+                        await latest.save();
+
+                        // Emit both auto-released and status changed
+                        emitIo(req, 'table_auto_released', {
+                            tableId: latest._id,
+                            tableNumber: latest.tableNumber,
+                            status: 'available',
+                            updatedAt: latest.updatedAt
+                        });
+                        emitIo(req, 'table_status_changed', {
+                            tableId: latest._id,
+                            tableNumber: latest.tableNumber,
+                            status: 'available',
+                            updatedAt: latest.updatedAt
+                        });
+                    }
+                } catch (e) { /* ignore */ }
+            }, 20000);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Cập nhật bàn thành công',
+            data: updatedTable
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi cập nhật bàn',
+            error: error.message
+        });
     }
-    return res.status(200).json({
-      success: true,
-      message: "Cập nhật bàn thành công",
-      data: updatedTable,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Lỗi khi cập nhật bàn",
-      error: error.message,
-    });
-  }
 };
 
 // Cập nhật trạng thái bàn
 exports.updateTableStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-    const updatedTable = await tableModel.findByIdAndUpdate(
-      req.params.id,
-      { status, updatedAt: Date.now() },
-      { new: true, runValidators: true }
-    );
-    if (!updatedTable) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy bàn",
-      });
+    try {
+        const {status} = req.body;
+        const updatedTable = await tableModel.findByIdAndUpdate(
+            req.params.id,
+            {status, updatedAt: new Date()},
+            {new: true, runValidators: true}
+        );
+        if (!updatedTable) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy bàn'
+            });
+        }
+
+        // Emit status changed
+        emitIo(req, 'table_status_changed', {
+            tableId: updatedTable._id,
+            tableNumber: updatedTable.tableNumber,
+            status: updatedTable.status,
+            updatedAt: updatedTable.updatedAt
+        });
+
+        // If set to reserved via this endpoint, schedule auto-release
+        if (updatedTable.status === 'reserved') {
+            emitIo(req, 'table_reserved', {
+                tableId: updatedTable._id,
+                tableNumber: updatedTable.tableNumber,
+                status: 'reserved',
+                updatedAt: updatedTable.updatedAt
+            });
+
+            const id = req.params.id;
+            setTimeout(async () => {
+                try {
+                    const latest = await tableModel.findById(id);
+                    if (latest && latest.status === 'reserved') {
+                        latest.status = 'available';
+                        latest.updatedAt = new Date();
+                        if (latest.reservationName) latest.reservationName = '';
+                        if (latest.reservationPhone) latest.reservationPhone = '';
+                        if (latest.reservationAt) latest.reservationAt = '';
+                        await latest.save();
+
+                        emitIo(req, 'table_auto_released', {
+                            tableId: latest._id,
+                            tableNumber: latest.tableNumber,
+                            status: 'available',
+                            updatedAt: latest.updatedAt
+                        });
+                        emitIo(req, 'table_status_changed', {
+                            tableId: latest._id,
+                            tableNumber: latest.tableNumber,
+                            status: 'available',
+                            updatedAt: latest.updatedAt
+                        });
+                    }
+                } catch (e) { /* ignore */ }
+            }, 20000);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Cập nhật trạng thái bàn thành công',
+            data: updatedTable
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi cập nhật trạng thái bàn',
+            error: error.message
+        });
     }
-    res.status(200).json({
-      success: true,
-      message: "Cập nhật trạng thái bàn thành công",
-      data: updatedTable,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Lỗi khi cập nhật trạng thái bàn",
-      error: error.message,
-    });
-  }
 };
+
 
 // Xóa bàn
 exports.deleteTable = async (req, res) => {
@@ -165,4 +204,133 @@ exports.deleteTable = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// Đặt trước bàn và tự động hủy sau 20s nếu chưa có ai nhận
+exports.reserveTable = async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Đặt trạng thái reserved
+        const table = await tableModel.findByIdAndUpdate(
+            id,
+            { status: 'reserved', updatedAt: new Date(), reservationAt: req.body.reservationAt || '', reservationName: req.body.reservationName || '', reservationPhone: req.body.reservationPhone || '' },
+            { new: true, runValidators: true }
+        );
+        if (!table) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy bàn' });
+        }
+
+        // Emit reserved and status changed
+        emitIo(req, 'table_reserved', {
+            tableId: table._id,
+            tableNumber: table.tableNumber,
+            status: 'reserved',
+            updatedAt: table.updatedAt
+        });
+        emitIo(req, 'table_status_changed', {
+            tableId: table._id,
+            tableNumber: table.tableNumber,
+            status: 'reserved',
+            updatedAt: table.updatedAt
+        });
+
+        res.status(200).json({ success: true, message: 'Đã đặt trước bàn', data: table });
+
+        // Sau 20s kiểm tra lại trạng thái, nếu vẫn reserved thì chuyển về available
+        setTimeout(async () => {
+            try {
+                const latest = await tableModel.findById(id);
+                if (latest && latest.status === 'reserved') {
+                    latest.status = 'available';
+                    latest.updatedAt = new Date();
+                    if (latest.reservationName) latest.reservationName = '';
+                    if (latest.reservationPhone) latest.reservationPhone = '';
+                    if (latest.reservationAt) latest.reservationAt = '';
+                    await latest.save();
+
+                    // Emit socket event thông báo bàn đã tự động hủy đặt trước
+                    emitIo(req, 'table_auto_released', {
+                        tableId: latest._id,
+                        tableNumber: latest.tableNumber,
+                        status: 'available',
+                        updatedAt: latest.updatedAt
+                    });
+                    emitIo(req, 'table_status_changed', {
+                        tableId: latest._id,
+                        tableNumber: latest.tableNumber,
+                        status: 'available',
+                        updatedAt: latest.updatedAt
+                    });
+                }
+            } catch (e) { /* ignore */ }
+        }, 20000);
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Lỗi khi đặt trước bàn', error: error.message });
+    }
+};
+
+// Lấy danh sách bàn theo trạng thái
+exports.getTablesByStatus = async (req, res) => {
+    try {
+        const { status } = req.params;
+        const tables = await tableModel.find({ status });
+        res.status(200).json({
+            success: true,
+            data: tables
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy danh sách bàn theo trạng thái',
+            error: error.message
+        });
+    }
+};
+
+// Lấy chi tiết một bàn theo ID
+exports.getTableById = async (req, res) => {
+    try {
+        const table = await tableModel.findById(req.params.id);
+        if (!table) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy bàn'
+            });
+        }
+        res.status(200).json({
+            success: true,
+            data: table
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy chi tiết bàn',
+            error: error.message
+        });
+    }
+};
+
+// Thêm bàn mới
+exports.createTable = async (req, res) => {
+    try {
+        const { tableNumber, capacity, location, status } = req.body;
+        const newTable = new tableModel({
+            tableNumber,
+            capacity,
+            location,
+            status: status || 'available'
+        });
+        await newTable.save();
+        res.status(201).json({
+            success: true,
+            message: 'Thêm bàn thành công',
+            data: newTable
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi thêm bàn',
+            error: error.message
+        });
+    }
 };

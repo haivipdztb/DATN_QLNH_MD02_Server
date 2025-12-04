@@ -74,7 +74,7 @@ exports.createIngredient = async (req, res) => {
       category
     } = req.body;
 
-    const newIngredient = new ingredientModel({
+        const newIngredient = new ingredientModel({
       name,
       tag,
       unit,
@@ -85,8 +85,9 @@ exports.createIngredient = async (req, res) => {
       supplier,
       minThreshold,
       importPrice,
-      category
-    });
+      category,
+      lastRestocked: quantity > 0 ? new Date() : null
+        });
 
     const saved = await newIngredient.save();
 
@@ -205,8 +206,7 @@ exports.restockIngredient = async (req, res) => {
 
     // Cộng số lượng
     ingredient.quantity += amount;
-    ingredient.lastRestocked = Date.now();
-
+    ingredient.lastRestocked = new Date();
     await ingredient.save();
 
     return res.status(200).json({
@@ -272,7 +272,7 @@ exports.updateIngredient = async (req, res) => {
         minThreshold,
         importPrice,
         category,
-        updatedAt: Date.now()
+        updatedAt: new Date()
       },
       { new: true, runValidators: true }
     ).exec();

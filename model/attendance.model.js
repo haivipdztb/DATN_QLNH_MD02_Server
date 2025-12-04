@@ -11,7 +11,7 @@ const attendanceSchema = new db.mongoose.Schema({
   wifiBSSID: { type: String },
   deviceId: { type: String },
   status: { type: String, enum: ['normal', 'auto-checkout', 'pending'], default: 'normal' },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: () => new Date() }
 }, {
   collection: 'attendances'
 });

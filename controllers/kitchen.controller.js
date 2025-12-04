@@ -407,7 +407,7 @@ async function requestCancelDish(req, res) {
     // Cập nhật trạng thái thành cancel_requested
     item.status = 'cancel_requested';
     item.cancelRequestedBy = requestedBy || null;
-    item.cancelRequestedAt = new Date();
+    item.cancelRequestedAt = new Date(); // Đã đúng thời gian thực
     item.cancelReason = reason || 'Khách yêu cầu hủy';
 
     await order.save();

@@ -12,7 +12,7 @@ const reportSchema = new db.mongoose.Schema(
        totalDiscountGiven: {type: Number, default: 0},
        averageOrderValue: {type: Number, required: true},
        details: {type: Object},
-       generatedAt: {type: Date, default: Date.now}
+    generatedAt: {type: Date, default: () => new Date()}
    },
    {
        collection:'reports' // tên bảng dữ liệu

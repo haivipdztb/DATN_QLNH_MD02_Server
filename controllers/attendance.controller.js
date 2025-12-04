@@ -11,7 +11,7 @@ exports.checkIn = async (req, res) => {
     const exist = await attendanceModel.findOne({ userId, shiftId, workDate, checkIn: { $ne: null } });
     if (exist) return res.status(400).json({ success: false, message: 'Đã check-in ca này!' });
     // TODO: Kiểm tra wifiBSSID hợp lệ ở đây nếu cần
-    const attendance = new attendanceModel({ userId, shiftId, workDate, wifiBSSID, deviceId, checkInType: checkInType || 'wifi', checkIn: new Date() });
+    const attendance = new attendanceModel({ userId, shiftId, workDate, wifiBSSID, deviceId, checkInType: checkInType || 'wifi', checkIn: new Date() }); // Đã đúng thời gian thực
     await attendance.save();
     res.status(201).json({ success: true, data: attendance });
   } catch (error) {
@@ -24,7 +24,7 @@ exports.checkOut = async (req, res) => {
     const { userId, shiftId, workDate, wifiBSSID, deviceId, checkOutType } = req.body;
     const attendance = await attendanceModel.findOne({ userId, shiftId, workDate, checkOut: null });
     if (!attendance) return res.status(400).json({ success: false, message: 'Chưa check-in hoặc đã check-out!' });
-    attendance.checkOut = new Date();
+    attendance.checkOut = new Date(); // Đã đúng thời gian thực
     attendance.checkOutType = checkOutType || 'wifi';
     attendance.wifiBSSID = wifiBSSID;
     attendance.deviceId = deviceId;

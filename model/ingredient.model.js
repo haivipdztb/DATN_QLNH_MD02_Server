@@ -32,10 +32,8 @@ const ingredientSchema = new db.mongoose.Schema(
       enum: ['available', 'low_stock', 'out_of_stock'],
       default: 'available'
     },
-
-    lastRestocked: { type: Date }, // Lần nhập hàng gần nhất
-    lastImportDate: { type: Date }, // Ngày nhập hàng gần nhất (deprecated, dùng lastRestocked)
-    expirationDate: { type: Date }, // Hạn sử dụng (nếu cần quản lý lô)
+    lastRestocked: { type: Date }, // Lần nhập kho gần nhất
+    expirationDate: { type: Date }, // Hạn sử dụng (nếu cần)
   },
   {
     collection: 'ingredients',
@@ -52,6 +50,7 @@ ingredientSchema.pre('save', function (next) {
   } else {
     this.status = 'available';
   }
+  // Không cần tự cập nhật updatedAt vì đã có timestamps: true
   next();
 });
 

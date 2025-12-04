@@ -23,4 +23,7 @@ router.patch('/:id/status', tableController.updateTableStatus);
 // Xóa bàn
 router.delete('/:id', tableController.deleteTable);
 
+// Đặt trước bàn và tự động hủy sau 20s nếu chưa có ai nhận
+router.post('/:id/reserve', tableController.reserveTable);
+
 module.exports = router;

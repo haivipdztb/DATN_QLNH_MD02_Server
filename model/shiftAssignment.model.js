@@ -6,7 +6,7 @@ const shiftAssignmentSchema = new db.mongoose.Schema({
   workDate: { type: String, required: true }, // YYYY-MM-DD
   assignedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel' },
   status: { type: String, enum: ['active', 'cancelled'], default: 'active' },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: () => new Date() }
 }, {
   collection: 'shift_assignments'
 });
