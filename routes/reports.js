@@ -5,6 +5,8 @@ const reportController = require('../controllers/report.controller');
 // GET - Lấy danh sách tất cả báo cáo
 router.get('/', reportController.getAllReports);
 
+router.get('/byDate', reportController.getReportsByDate); // <-- Thêm ở đây
+
 // GET - Thống kê doanh thu theo giờ
 router.get('/hourly', reportController.getRevenueByHour);
 

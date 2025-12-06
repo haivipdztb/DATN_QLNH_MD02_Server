@@ -208,6 +208,40 @@ exports.deleteReport = async (req, res) => {
     }
 };
 
+// Lấy báo cáo theo khoảng ngày
+exports.getReportsByDate = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Cần cung cấp startDate và endDate" 
+            });
+        }
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0); // bắt đầu ngày
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // kết thúc ngày
+        const reports = await reportModel.find({
+            date: { $gte: start, $lte: end }
+        }).sort({ date: 1 });
+        return res.status(200).json({
+            success: true,
+            data: reports
+        });
+
+    } catch (error) {
+        console.error("getReportsByDate error:", error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy báo cáo theo ngày',
+            error: error.message
+        });
+    }
+};
+
+
+
 // Tạo báo cáo theo tháng
 exports.createMonthlyReport = async (req, res) => {
     try {

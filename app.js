@@ -26,6 +26,7 @@ var attendanceRouter = require('./routes/attendance');
 var shiftsRouter = require('./routes/shifts');
 var shiftAssignmentsRouter = require('./routes/shiftAssignments');
 var payrollRouter = require('./routes/payroll');
+var historyRouter = require('./routes/history');
 
 var attendanceRouter = require('./routes/attendance');
 var shiftAssignmentsRouter = require('./routes/shiftAssignments');
@@ -61,6 +62,8 @@ app.use('/attendance', attendanceRouter);
 app.use('/shifts', shiftsRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);
 app.use('/payroll', payrollRouter); 
+app.use('/ingredients', ingredientsRouter); 
+app.use('/history', historyRouter);
 
 app.use('/attendance', attendanceRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);

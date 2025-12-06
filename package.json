@@ -18,7 +18,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.3",
     "morgan": "~1.9.1",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.0",

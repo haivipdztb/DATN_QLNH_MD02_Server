@@ -5,6 +5,16 @@ const orderController = require('../controllers/order.controller');
 
 const kitchenController = require('../controllers/kitchen.controller');
 
+router.get('/revenue', orderController.getRevenueFromOrders);
+
+// Thống kê doanh thu theo ngày (theo query ?fromDate&toDate)
+router.get('/byDate', orderController.getRevenueByDate);
+
+// Lịch sử đơn đã thanh toán
+router.get('/historyod', orderController.getPaidOrders);
+
+router.post('/pay', orderController.payOrder);
+
 // GET - Lấy danh sách tất cả orders (hỗ trợ ?tableNumber=)
 router.get('/', orderController.getAllOrders);
 
