@@ -17,15 +17,9 @@ const tableSchema = new db.mongoose.Schema(
             ref: 'orderModel',
             default: null
         }, // ID của order hiện tại (nếu có)
-<<<<<<< Updated upstream
-        location: {type: String, required: false}, // Vị trí bàn (tầng 1, tầng 2, ngoài trời...)
-        createdAt: {type: Date, default: () => new Date()},
-        updatedAt: {type: Date, default: () => new Date()}
-=======
         location: { type: String, required: false }, // Vị trí bàn (tầng 1, tầng 2, ngoài trời...)
-        createdAt: { type: Date, default: Date.now },
-        updatedAt: { type: Date, default: Date.now }
->>>>>>> Stashed changes
+        createdAt: { type: Date, default: () => new Date() },
+        updatedAt: { type: Date, default: () => new Date() }
     },
     {
         collection: 'tables' // Tên collection trong database
