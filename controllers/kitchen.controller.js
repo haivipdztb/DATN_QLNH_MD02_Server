@@ -18,6 +18,7 @@ function normalizeStatus(input) {
   if (s === 'ready' || s === 'xong' || s === 'đã xong' || s === 'da xong') return 'ready';
   if (s === 'soldout' || s === 'het' || s === 'hết' || s === 'đã hết') return 'soldout';
   if (s === 'cancel_requested' || s === 'yeu cau huy' || s === 'yêu cầu hủy') return 'cancel_requested';
+  if (s === 'served' || s === 'đã phục vụ' || s === 'da phuc vu') return 'served';
   return s; // trả về nguyên dạng đã lowercase nếu không map được (sẽ validate sau)
 }
 
@@ -94,7 +95,7 @@ async function updateItemStatus(req, res) {
     console.log('updateItemStatus called', { orderId, itemId, body: req.body });
 
     const normalized = normalizeStatus(status);
-    const validStatuses = ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested'];
+    const validStatuses = ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested', 'served'];
     if (!validStatuses.includes(normalized)) {
       return res.status(400).json({
         success: false,

@@ -22,7 +22,7 @@ const orderSchema = new db.mongoose.Schema(
 
         status: {
           type: String,
-          enum: ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested'],
+          enum: ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested', 'served'],
           default: 'pending'
         }, // Trạng thái món: chờ, đang làm, sẵn sàng, hết món, yêu cầu hủy
 
