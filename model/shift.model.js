@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 // Định nghĩa schema cho shift (ca làm việc)
 const shiftSchema = new db.mongoose.Schema(
@@ -44,6 +45,8 @@ shiftSchema.pre('save', function (next) {
     next();
 });
 
+// Thêm soft delete plugin
+shiftSchema.plugin(softDeletePlugin);
 
 const shiftModel = db.mongoose.model('shiftModel', shiftSchema);
 module.exports = { shiftModel };

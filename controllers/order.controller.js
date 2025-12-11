@@ -291,7 +291,7 @@ exports.updateOrder = async (req, res) => {
  */
 exports.deleteOrder = async (req, res) => {
   try {
-    const deleted = await orderModel.findByIdAndDelete(req.params.id).exec();
+    const deleted = await orderModel.softDelete(req.params.id).exec();
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
     }

@@ -151,7 +151,7 @@ exports.updateShift = async (req, res) => {
 // Xóa ca làm việc
 exports.deleteShift = async (req, res) => {
     try {
-        const deleted = await shiftModel.findByIdAndDelete(req.params.id).exec();
+        const deleted = await shiftModel.softDelete(req.params.id).exec();
 
         if (!deleted) {
             return res.status(404).json({

@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 const payrollSchema = new db.mongoose.Schema({
   userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
@@ -10,6 +11,9 @@ const payrollSchema = new db.mongoose.Schema({
 }, {
   collection: 'payrolls'
 });
+
+// Thêm soft delete plugin
+payrollSchema.plugin(softDeletePlugin);
 
 const payrollModel = db.mongoose.model('payrollModel', payrollSchema);
 module.exports = { payrollModel };

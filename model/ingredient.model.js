@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 const ingredientSchema = new db.mongoose.Schema(
   {
@@ -53,6 +54,9 @@ ingredientSchema.pre('save', function (next) {
   // Không cần tự cập nhật updatedAt vì đã có timestamps: true
   next();
 });
+
+// Thêm soft delete plugin
+ingredientSchema.plugin(softDeletePlugin);
 
 let ingredientModel = db.mongoose.model('ingredientModel', ingredientSchema);
 module.exports = { ingredientModel };

@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 const salaryConfigSchema = new db.mongoose.Schema({
     userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true, unique: true },
@@ -22,6 +23,10 @@ const salaryLogSchema = new db.mongoose.Schema({
     note: { type: String },
     status: { type: String, enum: ['pending', 'paid'], default: 'pending' }
 }, { timestamps: true });
+
+// Thêm soft delete plugin
+salaryConfigSchema.plugin(softDeletePlugin);
+salaryLogSchema.plugin(softDeletePlugin);
 
 const salaryConfigModel = db.mongoose.model('salaryConfigModel', salaryConfigSchema);
 const salaryLogModel = db.mongoose.model('salaryLogModel', salaryLogSchema);

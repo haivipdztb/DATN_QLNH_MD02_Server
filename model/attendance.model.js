@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 const attendanceSchema = new db.mongoose.Schema({
   userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
@@ -15,6 +16,9 @@ const attendanceSchema = new db.mongoose.Schema({
 }, {
   collection: 'attendances'
 });
+
+// Thêm soft delete plugin
+attendanceSchema.plugin(softDeletePlugin);
 
 const attendanceModel = db.mongoose.model('attendanceModel', attendanceSchema);
 module.exports = { attendanceModel };

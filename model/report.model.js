@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 
 // định nghĩa khuôn mẫu cho model
@@ -18,6 +19,10 @@ const reportSchema = new db.mongoose.Schema(
        collection:'reports' // tên bảng dữ liệu
    }
 )
+
+// Thêm soft delete plugin
+reportSchema.plugin(softDeletePlugin);
+
 // tạo model
 let reportModel = db.mongoose.model('reportModel', reportSchema);
 module.exports = {reportModel};

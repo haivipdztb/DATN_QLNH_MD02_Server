@@ -98,7 +98,7 @@ exports.updateMenuItem = async (req, res) => {
 // Xóa menu item theo ID
 exports.deleteMenuItem = async (req, res) => {
     try {
-        const deletedMenuItem = await menuModel.findByIdAndDelete(req.params.id);
+        const deletedMenuItem = await menuModel.softDelete(req.params.id);
         if (!deletedMenuItem) {
             return res.status(404).json({
                 success: false,

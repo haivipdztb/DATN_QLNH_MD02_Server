@@ -188,7 +188,7 @@ exports.updateTableStatus = async (req, res) => {
 // Xóa bàn
 exports.deleteTable = async (req, res) => {
   try {
-    const deletedTable = await tableModel.findByIdAndDelete(req.params.id);
+    const deletedTable = await tableModel.softDelete(req.params.id);
     if (!deletedTable) {
       return res.status(404).json({
         success: false,

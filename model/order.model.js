@@ -1,5 +1,6 @@
 // model/order.model.js
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 // định nghĩa khuôn mẫu cho model (bao gồm các trường snapshot để lưu name/image/price tại thời điểm order)
 const orderSchema = new db.mongoose.Schema(
@@ -56,6 +57,10 @@ const orderSchema = new db.mongoose.Schema(
     collection: 'orders' // tên bảng dữ liệu
   }
 );
+
+
+// Thêm soft delete plugin
+orderSchema.plugin(softDeletePlugin);
 
 // tạo model
 let orderModel = db.mongoose.model('orderModel', orderSchema);

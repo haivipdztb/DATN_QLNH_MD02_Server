@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 // Định nghĩa schema cho voucher
 const voucherSchema = new db.mongoose.Schema(
@@ -32,6 +33,9 @@ voucherSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
+
+// Thêm soft delete plugin
+voucherSchema.plugin(softDeletePlugin);
 
 // Tạo model
 let voucherModel = db.mongoose.model('voucherModel', voucherSchema);

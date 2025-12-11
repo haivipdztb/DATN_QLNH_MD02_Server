@@ -170,7 +170,7 @@ exports.updateVoucher = async (req, res) => {
 // Xóa voucher
 exports.deleteVoucher = async (req, res) => {
     try {
-        const deleted = await voucherModel.findByIdAndDelete(req.params.id).exec();
+        const deleted = await voucherModel.softDelete(req.params.id).exec();
 
         if (!deleted) {
             return res.status(404).json({
