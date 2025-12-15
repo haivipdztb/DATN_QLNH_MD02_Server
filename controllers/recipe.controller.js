@@ -377,3 +377,121 @@ exports.checkIngredientsAvailability = async (req, res) => {
         });
     }
 };
+exports.consumeRecipe = async (req, res) => {
+  const mongoose = require('mongoose'); // sử dụng session nếu có
+  try {
+    const { menuItemId, quantity = 1, orderId } = req.body;
+    if (!menuItemId) {
+      return res.status(400).json({ success: false, message: 'Thiếu menuItemId' });
+    }
+
+    const qty = Number(quantity) > 0 ? Number(quantity) : 1;
+
+    // Tìm recipe theo menuItemId
+    const recipe = await recipeModel.findOne({ menuItemId: menuItemId });
+    if (!recipe) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy công thức' });
+    }
+
+    // Tính multiplier
+    const servings = recipe.servings && recipe.servings > 0 ? recipe.servings : 1;
+    const multiplier = qty / servings;
+
+    // Chuẩn bị kiểm tra tất cả nguyên liệu trước khi trừ
+    const shortages = [];
+    const toConsume = []; // { ingredient, requiredQuantity, recipeIng }
+
+    for (const recipeIng of recipe.ingredients) {
+      const requiredQuantity = recipeIng.quantity * multiplier;
+
+      const ingredient = await ingredientModel.findById(recipeIng.ingredientId);
+      if (!ingredient) {
+        return res.status(404).json({
+          success: false,
+          message: `Không tìm thấy nguyên liệu: ${recipeIng.ingredientName || recipeIng.ingredientId}`
+        });
+      }
+
+      if (ingredient.quantity < requiredQuantity) {
+        shortages.push({
+          ingredientId: ingredient._id,
+          ingredientName: ingredient.name,
+          required: requiredQuantity,
+          available: ingredient.quantity,
+          unit: ingredient.unit
+        });
+      } else {
+        toConsume.push({ ingredient, requiredQuantity, recipeIng });
+      }
+    }
+
+    if (shortages.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không đủ nguyên liệu',
+        data: { shortages }
+      });
+    }
+
+    // Nếu đến đây là đủ -> thực hiện cập nhật trong transaction (nếu mongo hỗ trợ)
+    let session = null;
+    let consumedResults = [];
+    try {
+      // Tạo session nếu mongoose hỗ trợ
+      if (mongoose.connection && mongoose.connection.startSession) {
+        session = await mongoose.startSession();
+        session.startTransaction();
+      }
+
+      for (const item of toConsume) {
+        const ing = await ingredientModel.findById(item.ingredient._id).session(session);
+        // Kiểm tra lại (nâng cấp an toàn)
+        if (!ing) {
+          throw new Error('Nguyên liệu bị mất trong quá trình xử lý: ' + item.recipeIng.ingredientName);
+        }
+        if (ing.quantity < item.requiredQuantity) {
+          throw new Error(`Nguyên liệu không đủ khi thực hiện: ${ing.name}`);
+        }
+
+        ing.quantity = (ing.quantity - item.requiredQuantity);
+        await ing.save({ session });
+
+        consumedResults.push({
+          ingredientId: ing._id,
+          ingredientName: ing.name,
+          deducted: item.requiredQuantity,
+          remaining: ing.quantity,
+          unit: ing.unit
+        });
+      }
+
+      if (session) await session.commitTransaction();
+    } catch (txErr) {
+      if (session) {
+        try { await session.abortTransaction(); } catch (e) { /* ignore */ }
+      }
+      // Ghi log và trả lỗi
+      console.error('consumeRecipe transaction error:', txErr);
+      return res.status(500).json({ success: false, message: 'Lỗi khi trừ nguyên liệu', error: txErr.message });
+    } finally {
+      if (session) session.endSession();
+    }
+
+    // Thành công
+    return res.status(200).json({
+      success: true,
+      message: 'Đã trừ nguyên liệu thành công',
+      data: {
+        menuItemId: recipe.menuItemId,
+        menuItemName: recipe.menuItemName,
+        orderId: orderId || null,
+        quantity: qty,
+        consumed: consumedResults
+      }
+    });
+
+  } catch (error) {
+    console.error('consumeRecipe error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi khi xử lý consumeRecipe', error: error.message });
+  }
+};

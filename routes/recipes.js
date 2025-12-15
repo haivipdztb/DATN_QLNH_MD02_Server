@@ -14,6 +14,8 @@ router.get('/:id/check-ingredients', recipeController.checkIngredientsAvailabili
 router.get('/:id', recipeController.getRecipeById);
 
 // POST, PUT, DELETE routes
+router.post('/consume', recipeController.consumeRecipe);
+
 router.post('/', recipeController.createRecipe);
 
 router.put('/:id', recipeController.updateRecipe);
