@@ -24,15 +24,11 @@ router.get('/historyod', orderController.getPaidOrders);
 // Payment route
 router.post('/pay', orderController.payOrder);
 
-// ✨ MỚI:  Di chuyển TẤT CẢ orders sang bàn khác (không tách hóa đơn)
-router.post('/move-to-table', orderController.moveOrdersToTable);
+// GET - Đếm số lượng yêu cầu kiểm tra bàn (phải đặt trước /:id)
+router.get('/check-items-requests/count', orderController.getCheckItemsRequestsCount);
 
-// CŨ:  Tách bàn (giữ lại cho tương thích)
-router.post('/split-table', orderController.splitTable);
-
-// ========================================
-// CRUD ROUTES
-// ========================================
+// GET - Lấy danh sách yêu cầu kiểm tra bàn (phải đặt trước /:id)
+router.get('/check-items-requests', orderController.getCheckItemsRequests);
 
 // GET - Lấy danh sách tất cả orders (hỗ trợ ?tableNumber=)
 router.get('/', orderController.getAllOrders);
@@ -65,5 +61,14 @@ router.patch('/:orderId/check-items', orderController.checkOrderItems);
 
 // POST - Yêu cầu hủy món (phục vụ gửi yêu cầu lên bếp kèm lý do)
 router.post('/:orderId/items/:itemId/request-cancel', kitchenController.requestCancelDish);
+
+// POST - Tạo yêu cầu kiểm tra bàn cho một order
+router.post('/:id/request-check-items', orderController.requestCheckItems);
+
+// PUT - Cập nhật trạng thái kiểm tra bàn
+router.put('/:id/check-items-status', orderController.updateCheckItemsStatus);
+
+// DELETE - Xóa yêu cầu kiểm tra bàn
+router.delete('/:id/check-items-request', orderController.clearCheckItemsRequest);
 
 module.exports = router;

@@ -9,7 +9,7 @@ const tableSchema = new db.mongoose.Schema(
         status: {
             type: String,
             required: true,
-            enum: ['available', 'occupied', 'reserved'], // Trạng thái: trống, đang sử dụng, đã đặt
+            enum: ['available', 'occupied', 'reserved', 'inspection_requested'], // Trạng thái: trống, đang sử dụng, đã đặt, đã yêu cầu kiểm tra
             default: 'available'
         },
         currentOrder: {
