@@ -104,12 +104,13 @@ function ensureCheckItemsFields(order) {
   if (!('checkItemsRequestedBy' in order)) {
     order.checkItemsRequestedBy = null;
   }
-  // Nếu checkItemStatus là null hoặc không tồn tại, đặt mặc định là 'request_inspection'
+  // Nếu checkItemStatus là null hoặc không tồn tại
   if (!('checkItemStatus' in order) || order.checkItemStatus === null || order.checkItemStatus === undefined || order.checkItemStatus === '') {
-    // Chỉ set mặc định nếu đã có yêu cầu kiểm tra (checkItemsRequestedAt không null và không rỗng)
+    // Nếu đã có yêu cầu kiểm tra (checkItemsRequestedAt không null), set thành 'pending' (Đã gửi yêu cầu)
     if (order.checkItemsRequestedAt && order.checkItemsRequestedAt !== null) {
-      order.checkItemStatus = 'request_inspection';
+      order.checkItemStatus = 'pending';
     } else {
+      // Chưa gửi yêu cầu kiểm tra → giữ null
       order.checkItemStatus = null;
     }
   }
@@ -830,29 +831,32 @@ exports.requestCheckItems = async (req, res) => {
     // Cập nhật checkItemsRequestedAt, checkItemsRequestedBy và checkItemStatus
     order.checkItemsRequestedAt = new Date();
     order.checkItemsRequestedBy = requestedBy || null;
-    order.checkItemStatus = checkItemStatus || 'request_inspection'; // Mặc định là 'request_inspection' nếu không có
+    // Khi gửi yêu cầu kiểm tra, set checkItemStatus thành 'pending' (Đã gửi yêu cầu)
+    order.checkItemStatus = checkItemStatus || 'pending'; // Mặc định là 'pending' khi gửi yêu cầu kiểm tra
     await order.save();
 
-    // Cập nhật trạng thái bàn nếu có tableStatus
+    // Cập nhật trạng thái bàn: tự động set thành 'inspection_requested' nếu không có tableStatus được truyền vào
     let updatedTable = null;
-    if (tableStatus && order.tableNumber) {
+    const statusToSet = tableStatus || 'inspection_requested'; // Mặc định là 'inspection_requested' khi yêu cầu kiểm tra
+    
+    if (order.tableNumber) {
       try {
         // Validate tableStatus
-        const validStatuses = ['available', 'occupied', 'reserved'];
-        if (!validStatuses.includes(tableStatus)) {
-          console.warn(`Trạng thái bàn không hợp lệ: ${tableStatus}`);
+        const validStatuses = ['available', 'occupied', 'reserved', 'inspection_requested'];
+        if (!validStatuses.includes(statusToSet)) {
+          console.warn(`Trạng thái bàn không hợp lệ: ${statusToSet}`);
         } else {
           updatedTable = await tableModel.findOneAndUpdate(
             { tableNumber: order.tableNumber },
             { 
-              status: tableStatus,
+              status: statusToSet,
               updatedAt: new Date()
             },
             { new: true, runValidators: true }
           );
           
           if (updatedTable) {
-            console.log(`Đã cập nhật trạng thái bàn ${order.tableNumber} thành: ${tableStatus}`);
+            console.log(`Đã cập nhật trạng thái bàn ${order.tableNumber} thành: ${statusToSet}`);
           } else {
             console.warn(`Không tìm thấy bàn số ${order.tableNumber}`);
           }
@@ -879,7 +883,7 @@ exports.requestCheckItems = async (req, res) => {
       requestedBy: requestedBy,
       requestedAt: order.checkItemsRequestedAt,
       checkItemStatus: order.checkItemStatus,
-      tableStatus: tableStatus || null
+      tableStatus: statusToSet || null
     });
 
     return res.status(200).json({
@@ -928,7 +932,7 @@ exports.updateCheckItemsStatus = async (req, res) => {
     if (tableStatus && order.tableNumber) {
       try {
         // Validate tableStatus
-        const validStatuses = ['available', 'occupied', 'reserved'];
+        const validStatuses = ['available', 'occupied', 'reserved', 'inspection_requested'];
         if (!validStatuses.includes(tableStatus)) {
           console.warn(`Trạng thái bàn không hợp lệ: ${tableStatus}`);
         } else {
