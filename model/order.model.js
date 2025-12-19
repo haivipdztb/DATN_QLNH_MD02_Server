@@ -59,6 +59,17 @@ const orderSchema = new db.mongoose.Schema(
     splitTo: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
     createdAt: { type: Date, default: () => new Date() },
     paidAt: { type: Date }
+    ,
+    // --- Kiểm tra món (cấp order) ---
+    checkItemsStatus: {
+      type: String,
+      enum: ['pending', 'completed', 'acknowledged'],
+      default: 'pending'
+    },
+    checkItemsCompletedAt: { type: Date },
+    checkItemsCompletedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null },
+    checkItemsNote: { type: String, default: '' }
+    ,
   },
   {
     collection: 'orders' // tên bảng dữ liệu

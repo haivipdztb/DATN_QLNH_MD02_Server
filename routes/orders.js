@@ -1,3 +1,11 @@
+// PATCH - Thu ngân gửi yêu cầu kiểm tra bàn
+router.patch('/:orderId/request-check-items', orderController.requestCheckItems);
+
+// PATCH - Phục vụ xác nhận đã kiểm tra bàn
+router.patch('/:orderId/complete-check-items', orderController.completeCheckItems);
+
+// PATCH - Thu ngân xác nhận đã nhận kết quả kiểm tra
+router.patch('/:orderId/acknowledge-check-items', orderController.acknowledgeCheckItems);
 // routes/orders.js
 const express = require('express');
 const router = express.Router();
@@ -50,6 +58,10 @@ router.post('/:id/request-temp-calculation', orderController.requestTempCalculat
 
 // PATCH - Cập nhật trạng thái món
 router.patch('/:orderId/items/:itemId/status', kitchenController.updateItemStatus);
+
+// PATCH - Phục vụ xác nhận kiểm tra bàn (toàn bộ order)
+router.patch('/:orderId/check-items', orderController.checkOrderItems);
+
 
 // POST - Yêu cầu hủy món (phục vụ gửi yêu cầu lên bếp kèm lý do)
 router.post('/:orderId/items/:itemId/request-cancel', kitchenController.requestCancelDish);
