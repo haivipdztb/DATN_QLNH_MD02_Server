@@ -97,12 +97,21 @@ function populateOrderQuery(query) {
 function ensureCheckItemsFields(order) {
   if (!order) return order;
   
-  // Đảm bảo các field này luôn có trong response (ngay cả khi null)
+  // Đảm bảo các field này luôn có trong response
   if (!('checkItemsRequestedAt' in order)) {
     order.checkItemsRequestedAt = null;
   }
   if (!('checkItemsRequestedBy' in order)) {
     order.checkItemsRequestedBy = null;
+  }
+  // Nếu checkItemStatus là null hoặc không tồn tại, đặt mặc định là 'request_inspection'
+  if (!('checkItemStatus' in order) || order.checkItemStatus === null || order.checkItemStatus === undefined || order.checkItemStatus === '') {
+    // Chỉ set mặc định nếu đã có yêu cầu kiểm tra (checkItemsRequestedAt không null và không rỗng)
+    if (order.checkItemsRequestedAt && order.checkItemsRequestedAt !== null) {
+      order.checkItemStatus = 'request_inspection';
+    } else {
+      order.checkItemStatus = null;
+    }
   }
   
   return order;
@@ -291,12 +300,15 @@ exports.updateOrder = async (req, res) => {
       updateData.paidAt = paidAt;
     }
 
-    // Xử lý checkItemsRequestedAt và checkItemsRequestedBy nếu có trong request
+    // Xử lý checkItemsRequestedAt, checkItemsRequestedBy và checkItemStatus nếu có trong request
     if (checkItemsRequestedAt !== undefined) {
       updateData.checkItemsRequestedAt = checkItemsRequestedAt;
     }
     if (checkItemsRequestedBy !== undefined) {
       updateData.checkItemsRequestedBy = checkItemsRequestedBy;
+    }
+    if (req.body.checkItemStatus !== undefined) {
+      updateData.checkItemStatus = req.body.checkItemStatus;
     }
 
     const updated = await orderModel.findByIdAndUpdate(
@@ -787,10 +799,11 @@ exports.getCheckItemsRequests = async (req, res) => {
 /**
  * POST /orders/:id/request-check-items
  * Tạo yêu cầu kiểm tra bàn cho một order
+ * Nhận: requestedBy, tableStatus, checkItemStatus
  */
 exports.requestCheckItems = async (req, res) => {
   try {
-    const { requestedBy } = req.body; // ID nhân viên yêu cầu kiểm tra bàn
+    const { requestedBy, tableStatus, checkItemStatus } = req.body; // ID nhân viên, trạng thái bàn, trạng thái kiểm tra
     const orderId = req.params.id;
 
     // Tìm và cập nhật order
@@ -814,10 +827,41 @@ exports.requestCheckItems = async (req, res) => {
       });
     }
 
-    // Cập nhật checkItemsRequestedAt và checkItemsRequestedBy
+    // Cập nhật checkItemsRequestedAt, checkItemsRequestedBy và checkItemStatus
     order.checkItemsRequestedAt = new Date();
     order.checkItemsRequestedBy = requestedBy || null;
+    order.checkItemStatus = checkItemStatus || 'request_inspection'; // Mặc định là 'request_inspection' nếu không có
     await order.save();
+
+    // Cập nhật trạng thái bàn nếu có tableStatus
+    let updatedTable = null;
+    if (tableStatus && order.tableNumber) {
+      try {
+        // Validate tableStatus
+        const validStatuses = ['available', 'occupied', 'reserved'];
+        if (!validStatuses.includes(tableStatus)) {
+          console.warn(`Trạng thái bàn không hợp lệ: ${tableStatus}`);
+        } else {
+          updatedTable = await tableModel.findOneAndUpdate(
+            { tableNumber: order.tableNumber },
+            { 
+              status: tableStatus,
+              updatedAt: new Date()
+            },
+            { new: true, runValidators: true }
+          );
+          
+          if (updatedTable) {
+            console.log(`Đã cập nhật trạng thái bàn ${order.tableNumber} thành: ${tableStatus}`);
+          } else {
+            console.warn(`Không tìm thấy bàn số ${order.tableNumber}`);
+          }
+        }
+      } catch (tableError) {
+        console.error('Lỗi khi cập nhật trạng thái bàn:', tableError);
+        // Không throw error để không làm gián đoạn việc lưu order
+      }
+    }
 
     // Populate để lấy đầy đủ thông tin
     let query = orderModel.findById(order._id);
@@ -833,13 +877,20 @@ exports.requestCheckItems = async (req, res) => {
       tableNumber: order.tableNumber,
       order: populatedWithFields,
       requestedBy: requestedBy,
-      requestedAt: order.checkItemsRequestedAt
+      requestedAt: order.checkItemsRequestedAt,
+      checkItemStatus: order.checkItemStatus,
+      tableStatus: tableStatus || null
     });
 
     return res.status(200).json({
       success: true,
       message: 'Đã tạo yêu cầu kiểm tra bàn thành công',
-      data: populatedWithFields
+      data: populatedWithFields,
+      table: updatedTable ? {
+        tableNumber: updatedTable.tableNumber,
+        status: updatedTable.status,
+        updatedAt: updatedTable.updatedAt
+      } : null
     });
   } catch (error) {
     console.error('requestCheckItems error:', error);
@@ -852,8 +903,95 @@ exports.requestCheckItems = async (req, res) => {
 };
 
 /**
+ * PUT /orders/:id/check-items-status
+ * Cập nhật trạng thái kiểm tra bàn (checkItemStatus)
+ */
+exports.updateCheckItemsStatus = async (req, res) => {
+  try {
+    const { checkItemStatus, tableStatus } = req.body;
+    const orderId = req.params.id;
+
+    // Tìm và cập nhật order
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+
+    // Cập nhật checkItemStatus
+    if (checkItemStatus) {
+      order.checkItemStatus = checkItemStatus;
+      await order.save();
+    }
+
+    // Cập nhật trạng thái bàn nếu có
+    let updatedTable = null;
+    if (tableStatus && order.tableNumber) {
+      try {
+        // Validate tableStatus
+        const validStatuses = ['available', 'occupied', 'reserved'];
+        if (!validStatuses.includes(tableStatus)) {
+          console.warn(`Trạng thái bàn không hợp lệ: ${tableStatus}`);
+        } else {
+          updatedTable = await tableModel.findOneAndUpdate(
+            { tableNumber: order.tableNumber },
+            { 
+              status: tableStatus,
+              updatedAt: new Date()
+            },
+            { new: true, runValidators: true }
+          );
+          
+          if (updatedTable) {
+            console.log(`Đã cập nhật trạng thái bàn ${order.tableNumber} thành: ${tableStatus}`);
+          } else {
+            console.warn(`Không tìm thấy bàn số ${order.tableNumber}`);
+          }
+        }
+      } catch (tableError) {
+        console.error('Lỗi khi cập nhật trạng thái bàn:', tableError);
+      }
+    }
+
+    // Populate để lấy đầy đủ thông tin
+    let query = orderModel.findById(order._id);
+    query = populateOrderQuery(query);
+    const populated = await query.lean().exec();
+
+    // Đảm bảo các field checkItemsRequestedAt và checkItemsRequestedBy luôn có trong response
+    const populatedWithFields = ensureCheckItemsFields(populated);
+
+    // Emit Socket.IO event
+    emitOrderEvent(req, 'check_items_status_updated', {
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      order: populatedWithFields,
+      checkItemStatus: order.checkItemStatus,
+      tableStatus: tableStatus || null
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã cập nhật trạng thái kiểm tra bàn thành công',
+      data: populatedWithFields,
+      table: updatedTable ? {
+        tableNumber: updatedTable.tableNumber,
+        status: updatedTable.status,
+        updatedAt: updatedTable.updatedAt
+      } : null
+    });
+  } catch (error) {
+    console.error('updateCheckItemsStatus error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi cập nhật trạng thái kiểm tra bàn',
+      error: error.message
+    });
+  }
+};
+
+/**
  * DELETE /orders/:id/check-items-request
- * Xóa yêu cầu kiểm tra bàn (đặt checkItemsRequestedAt và checkItemsRequestedBy về null)
+ * Xóa yêu cầu kiểm tra bàn (đặt checkItemsRequestedAt, checkItemsRequestedBy và checkItemStatus về null)
  */
 exports.clearCheckItemsRequest = async (req, res) => {
   try {
@@ -868,6 +1006,7 @@ exports.clearCheckItemsRequest = async (req, res) => {
     // Xóa yêu cầu kiểm tra bàn
     order.checkItemsRequestedAt = null;
     order.checkItemsRequestedBy = null;
+    order.checkItemStatus = null;
     await order.save();
 
     // Populate để lấy đầy đủ thông tin

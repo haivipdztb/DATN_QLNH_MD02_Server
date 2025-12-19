@@ -48,6 +48,9 @@ router.post('/:orderId/items/:itemId/request-cancel', kitchenController.requestC
 // POST - Tạo yêu cầu kiểm tra bàn cho một order
 router.post('/:id/request-check-items', orderController.requestCheckItems);
 
+// PUT - Cập nhật trạng thái kiểm tra bàn
+router.put('/:id/check-items-status', orderController.updateCheckItemsStatus);
+
 // DELETE - Xóa yêu cầu kiểm tra bàn
 router.delete('/:id/check-items-request', orderController.clearCheckItemsRequest);
 
