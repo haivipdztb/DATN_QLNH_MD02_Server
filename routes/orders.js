@@ -1,3 +1,10 @@
+
+// routes/orders.js
+const express = require('express');
+const router = express.Router();
+const orderController = require('../controllers/order.controller');
+const kitchenController = require('../controllers/kitchen.controller');
+
 // PATCH - Thu ngân gửi yêu cầu kiểm tra bàn
 router.patch('/:orderId/request-check-items', orderController.requestCheckItems);
 
@@ -6,11 +13,6 @@ router.patch('/:orderId/complete-check-items', orderController.completeCheckItem
 
 // PATCH - Thu ngân xác nhận đã nhận kết quả kiểm tra
 router.patch('/:orderId/acknowledge-check-items', orderController.acknowledgeCheckItems);
-// routes/orders.js
-const express = require('express');
-const router = express.Router();
-const orderController = require('../controllers/order.controller');
-const kitchenController = require('../controllers/kitchen.controller');
 
 // ========================================
 // SPECIAL ROUTES (phải đặt TRƯỚC các routes có : id)
@@ -65,10 +67,5 @@ router.post('/:orderId/items/:itemId/request-cancel', kitchenController.requestC
 // POST - Tạo yêu cầu kiểm tra bàn cho một order
 router.post('/:id/request-check-items', orderController.requestCheckItems);
 
-// PUT - Cập nhật trạng thái kiểm tra bàn
-router.put('/:id/check-items-status', orderController.updateCheckItemsStatus);
-
-// DELETE - Xóa yêu cầu kiểm tra bàn
-router.delete('/:id/check-items-request', orderController.clearCheckItemsRequest);
 
 module.exports = router;
