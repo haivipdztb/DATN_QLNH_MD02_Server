@@ -53,6 +53,13 @@ const orderSchema = new db.mongoose.Schema(
     }, // pending: chờ xử lý, temp_calculation: tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
     tempCalculationRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu tạm tính
     tempCalculationRequestedAt: { type: Date }, // Thời gian yêu cầu tạm tính
+    checkItemsRequestedAt: { type: Date, default: null }, // Thời gian yêu cầu kiểm tra bàn
+    checkItemsRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu kiểm tra bàn
+    checkItemStatus: { 
+      type: String, 
+      enum: ['request_inspection', 'inspection_requested', 'pending', 'in_progress', 'completed', 'cancelled'], 
+      default: null 
+    }, // Trạng thái kiểm tra bàn: yêu cầu kiểm tra (chưa gửi), đã yêu cầu kiểm tra, chờ xử lý, đang kiểm tra, đã hoàn thành, đã hủy
     cancelReason: { type: String }, // Lý do hủy đơn
     cancelledAt: { type: Date }, // Thời gian hủy
     mergedFrom: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
@@ -65,6 +72,19 @@ const orderSchema = new db.mongoose.Schema(
   }
 );
 
+
+// Pre-save hook: Tự động set checkItemStatus thành 'pending' nếu có checkItemsRequestedAt nhưng checkItemStatus là null
+orderSchema.pre('save', function(next) {
+  // Nếu có checkItemsRequestedAt nhưng checkItemStatus là null hoặc undefined, set mặc định là 'pending' (Đã gửi yêu cầu)
+  if (this.checkItemsRequestedAt && (this.checkItemStatus === null || this.checkItemStatus === undefined || this.checkItemStatus === '')) {
+    this.checkItemStatus = 'pending';
+  }
+  // Nếu không có checkItemsRequestedAt, set checkItemStatus về null
+  if (!this.checkItemsRequestedAt && this.checkItemStatus) {
+    this.checkItemStatus = null;
+  }
+  next();
+});
 
 // Thêm soft delete plugin
 orderSchema.plugin(softDeletePlugin);
