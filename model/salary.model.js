@@ -1,5 +1,5 @@
 const db = require('./db');
-const { softDeletePlugin } = require('../utils/softDelete');
+// const { softDeletePlugin } = require('../utils/softDelete'); // Không cần soft delete cho salary
 
 const salaryConfigSchema = new db.mongoose.Schema({
     userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true, unique: true },
@@ -8,7 +8,10 @@ const salaryConfigSchema = new db.mongoose.Schema({
     dailyRate: { type: Number, default: 0 }, // Lương theo ngày
     allowance: { type: Number, default: 0 }, // Phụ cấp
     deductions: { type: Number, default: 0 }, // Khấu trừ mặc định
-}, { timestamps: true });
+}, {
+    collection: 'salaryconfigmodels',
+    timestamps: true
+});
 
 const salaryLogSchema = new db.mongoose.Schema({
     userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
@@ -22,11 +25,14 @@ const salaryLogSchema = new db.mongoose.Schema({
     deductions: { type: Number, default: 0 },
     note: { type: String },
     status: { type: String, enum: ['pending', 'paid'], default: 'pending' }
-}, { timestamps: true });
+}, {
+    collection: 'salarylogmodels',
+    timestamps: true
+});
 
-// Thêm soft delete plugin
-salaryConfigSchema.plugin(softDeletePlugin);
-salaryLogSchema.plugin(softDeletePlugin);
+// Không sử dụng soft delete plugin cho salary models
+// salaryConfigSchema.plugin(softDeletePlugin);
+// salaryLogSchema.plugin(softDeletePlugin);
 
 const salaryConfigModel = db.mongoose.model('salaryConfigModel', salaryConfigSchema);
 const salaryLogModel = db.mongoose.model('salaryLogModel', salaryLogSchema);

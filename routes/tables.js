@@ -1,6 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const tableController = require('../controllers/table.controller');
+// Tách bàn từ tables: POST /tables/:id/split-table-only
+const { splitTable } = require('../controllers/order.controller');
+router.post('/:id/split-table-only', async (req, res) => {
+  // :id là orderId, body cần có toTableNumber
+  const orderId = req.params.id;
+  const { toTableNumber } = req.body;
+  // Gọi lại logic splitTable của order.controller.js
+  req.body.orderId = orderId;
+  req.body.toTableNumber = toTableNumber;
+  return splitTable(req, res);
+});
 
 // Lấy danh sách tất cả các bàn
 router.get('/', tableController.getAllTables);

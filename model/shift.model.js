@@ -1,5 +1,5 @@
 const db = require('./db');
-const { softDeletePlugin } = require('../utils/softDelete');
+// const { softDeletePlugin } = require('../utils/softDelete'); // Không cần soft delete cho shifts
 
 
 // Định nghĩa schema cho shift (ca làm việc)
@@ -42,12 +42,12 @@ const shiftSchema = new db.mongoose.Schema(
 );
 
 shiftSchema.pre('save', function (next) {
-    this.updatedAt = Date.now();
-    next();
+  this.updatedAt = Date.now();
+  next();
 });
 
-// Thêm soft delete plugin
-shiftSchema.plugin(softDeletePlugin);
+// Không sử dụng soft delete plugin cho shifts (dữ liệu chấm công lịch sử)
+// shiftSchema.plugin(softDeletePlugin);
 
 const shiftModel = db.mongoose.model('shiftModel', shiftSchema);
 module.exports = { shiftModel };

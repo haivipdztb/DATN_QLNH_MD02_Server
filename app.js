@@ -72,7 +72,12 @@ app.use('/shift-assignments', shiftAssignmentsRouter);
 app.use('/payroll', payrollRouter);
 
 // catch 404 and forward to error handler
+
+// Middleware 404: trả về JSON nếu là API, tránh trả về HTML cho client mobile/app
 app.use(function (req, res, next) {
+  if (req.originalUrl.startsWith('/api') || req.headers.accept?.includes('application/json')) {
+    return res.status(404).json({ success: false, message: 'Not Found', url: req.originalUrl });
+  }
   next(createError(404));
 });
 

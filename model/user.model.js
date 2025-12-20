@@ -6,7 +6,12 @@ const userSchema = new db.mongoose.Schema(
     {
         username: { type: String, required: true, unique: true },
         password: { type: String, required: true },
-        role: { type: String, required: true },
+        role: {
+            type: String,
+            required: true,
+            enum: ['admin', 'kitchen', 'cashier', 'waiter'],
+            default: 'waiter'
+        },
         name: { type: String, required: true },
         phoneNumber: { type: String, required: false },
         email: { type: String, required: false, unique: true },
