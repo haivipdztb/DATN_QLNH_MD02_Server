@@ -49,8 +49,8 @@ const orderSchema = new db.mongoose.Schema(
       type: String, 
       required: true, 
       default: 'pending',
-      enum: ['pending', 'temp_calculation', 'confirmed', 'paid', 'cancelled']
-    }, // pending: chờ xử lý, temp_calculation: tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
+      enum: ['pending', 'temp_calculation', 'temp_bill_printed', 'confirmed', 'paid', 'cancelled']
+    }, // pending: chờ xử lý, temp_calculation: tạm tính, temp_bill_printed: đã in hóa đơn tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
     tempCalculationRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu tạm tính
     tempCalculationRequestedAt: { type: Date }, // Thời gian yêu cầu tạm tính
     checkItemsRequestedAt: { type: Date, default: null }, // Thời gian yêu cầu kiểm tra bàn
@@ -70,8 +70,10 @@ const orderSchema = new db.mongoose.Schema(
     },
     checkItemsCompletedAt: { type: Date },
     checkItemsCompletedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null },
-    checkItemsNote: { type: String, default: '' }
-    ,
+    checkItemsNote: { type: String, default: '' },
+    // --- In hóa đơn tạm tính ---
+    tempBillPrinted: { type: Boolean, default: false }, // Đã in hóa đơn tạm tính chưa
+    tempBillPrintCount: { type: Number, default: 0 } // Số lần in hóa đơn tạm tính
   },
   {
     collection: 'orders' // tên bảng dữ liệu

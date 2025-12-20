@@ -1,3 +1,42 @@
+/**
+ * PATCH /orders/:id/print-temp-bill
+ * Thu ngân in hóa đơn tạm tính: cập nhật trạng thái và số lần in
+ */
+exports.printTempBill = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+    }
+    // Chỉ cho phép in hóa đơn tạm tính khi đã ở trạng thái tạm tính
+    if (order.orderStatus !== 'temp_calculation') {
+      return res.status(400).json({ success: false, message: 'Order chưa ở trạng thái tạm tính' });
+    }
+    order.tempBillPrinted = true;
+    order.tempBillPrintCount = (order.tempBillPrintCount || 0) + 1;
+    order.orderStatus = 'temp_bill_printed';
+    await order.save();
+    // Emit event nếu cần
+    emitOrderEvent(req, 'temp_bill_printed', {
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      printCount: order.tempBillPrintCount
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Đã cập nhật trạng thái in hóa đơn tạm tính',
+      printCount: order.tempBillPrintCount
+    });
+  } catch (error) {
+    console.error('printTempBill error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi in hóa đơn tạm tính',
+      error: error.message
+    });
+  }
+};
 // controllers/order.controller.js
 const { orderModel } = require('../model/order.model');
 const { emitOrderEvent } = require('../sockets');
@@ -100,7 +139,8 @@ exports.getAllOrders = async (req, res) => {
       if (!isNaN(tn)) filter.tableNumber = tn;
       else filter.tableNumber = req.query.tableNumber;
     }
-    
+
+    // Chỉ filter orderStatus khi client truyền lên
     if (req.query && req.query.orderStatus) {
       filter.orderStatus = req.query.orderStatus;
     }

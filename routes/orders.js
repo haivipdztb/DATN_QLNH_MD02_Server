@@ -49,7 +49,10 @@ router.patch('/:orderId/complete-check-items', orderController.completeCheckItem
 router.patch('/:orderId/acknowledge-check-items', orderController.acknowledgeCheckItems);
 
 // POST - Yêu cầu tạm tính
-router.post('/:id/request-temp-calculation', orderController. requestTempCalculation);
+router.post('/:id/request-temp-calculation', orderController.requestTempCalculation);
+
+// PATCH - In hóa đơn tạm tính (thu ngân)
+router.patch('/:id/print-temp-bill', orderController.printTempBill);
 
 // PATCH - Phục vụ xác nhận kiểm tra bàn (toàn bộ order)
 router.patch('/:orderId/check-items', orderController.checkOrderItems);
