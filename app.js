@@ -28,10 +28,12 @@ var shiftAssignmentsRouter = require('./routes/shiftAssignments');
 var payrollRouter = require('./routes/payroll');
 var historyRouter = require('./routes/history');
 var recipesRouter = require('./routes/recipes');
+var paymentRouter = require('./routes/payment');
 
 var attendanceRouter = require('./routes/attendance');
 var shiftAssignmentsRouter = require('./routes/shiftAssignments');
 var payrollRouter = require('./routes/payroll');
+
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -70,6 +72,7 @@ app.use('/recipes', recipesRouter);
 app.use('/attendance', attendanceRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);
 app.use('/payroll', payrollRouter);
+app.use('/payment', paymentRouter);
 
 // catch 404 and forward to error handler
 

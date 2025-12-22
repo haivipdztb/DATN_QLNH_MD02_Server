@@ -14,7 +14,10 @@ router.get('/byDate', orderController.getRevenueByDate);
 router.get('/historyod', orderController.getPaidOrders);
 
 // Payment route
-router.post('/pay', orderController.payOrder);
+router.post('/pay', async (req, res) => {
+  const result = await orderController.payOrder(req);
+  res.json(result);
+});
 
 // GET - Đếm số lượng yêu cầu kiểm tra bàn (phải đặt trước /: id)
 router.get('/check-items-requests/count', orderController.getCheckItemsRequestsCount);

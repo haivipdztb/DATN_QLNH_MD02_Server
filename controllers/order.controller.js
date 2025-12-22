@@ -308,6 +308,45 @@ exports.updateOrder = async (req, res) => {
       tempCalculationRequestedBy
     } = req.body;
 
+    console.log('UPDATE ORDER DEBUG:', {
+      orderId: req.params.id,
+      totalAmount,
+      discount,
+      finalAmount: finalAmount || 'not provided'
+    });
+
+    let enrichedItems = undefined;
+    if (Array.isArray(items)) {
+      enrichedItems = await enrichItemsWithMenuData(items);
+    }
+
+    const updateData = {
+      tableNumber,
+      items: (typeof enrichedItems !== 'undefined') ? enrichedItems : items,
+      totalAmount,
+      discount,
+      paidAmount,
+      change,
+      paymentMethod,
+      orderStatus
+    };
+
+    // ✅ Tự tính finalAmount
+    if (totalAmount !== undefined) {
+      updateData.finalAmount = totalAmount - (discount || 0);
+    } else if (discount !== undefined) {
+      // Nếu chỉ gửi discount, lấy totalAmount hiện tại để tính finalAmount
+      const currentOrder = await orderModel.findById(req.params.id);
+      if (currentOrder) {
+        updateData.finalAmount = currentOrder.totalAmount - (discount || 0);
+      }
+    } else if (finalAmount !== undefined) {
+      updateData.finalAmount = finalAmount;
+    }
+
+    if (orderStatus === 'paid' && paidAt) {
+      updateData.paidAt = paidAt;
+    }
     const updates = {};
 
     // Basic fields
@@ -443,18 +482,76 @@ exports.deleteOrder = async (req, res) => {
  * Thanh toán và reset TẤT CẢ bàn trong tableNumbers
  */
 exports.payOrder = async (req, res) => {
+
+/**
+ * Reset trạng thái bàn sau khi thanh toán
+ * @param {number} tableNumber
+ * @returns {Promise<Object|null>}
+ */
+async function resetTableAfterPayment(tableNumber) {
+  if (tableNumber === undefined || tableNumber === null) return null;
+
+  const updatedTable = await tableModel.findOneAndUpdate(
+    { tableNumber },
+    { status: 'available', currentOrder: null, updatedAt: Date.now() },
+    { new: true }
+  );
+
+  return updatedTable;
+}
+};
+
+
+/**
+ * POST /orders/pay
+ * Thanh toán và reset TẤT CẢ bàn trong tableNumbers
+ */
+exports.payOrder = async (req, res) => {
   console.log('--- payOrder called ---', req.body);
 
   try {
-    const { orderId, paidAmount, paymentMethod, cashier } = req.body;
-    if (!orderId) return res.status(400).json({ success: false, message: 'Order id is required' });
+    const { orderId, paidAmount, paymentMethod, cashier, voucherId } = req.body;
+    if (!orderId) return { success: false, message: 'Order id is required' };
 
     const order = await orderModel.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if (!order) return { success: false, message: 'Order not found' };
+
+    // Nếu có voucherId, áp dụng voucher
+    if (voucherId) {
+      const { validateVoucherHelper, applyVoucherHelper } = require('./voucher.controller');
+      const voucherRes = await validateVoucherHelper(voucherId, order.totalAmount);
+      if (voucherRes.success) {
+        order.discount = voucherRes.data.discountAmount;
+        order.finalAmount = voucherRes.data.finalAmount;
+        await order.save();
+        await applyVoucherHelper(voucherId);
+      } else {
+        return { success: false, message: 'Voucher không hợp lệ: ' + voucherRes.message };
+      }
+    }
+
+    console.log('PAY ORDER DEBUG:', {
+      orderId,
+      totalAmount: order.totalAmount,
+      discount: order.discount,
+      finalAmount: order.finalAmount,
+      paidAmount
+    });
 
     const paid = Number(paidAmount) || 0;
+    
+    // Nếu thanh toán thẻ với paidAmount = 0, cho phép (đang chờ VNPay callback)
+    if (paymentMethod === 'Thẻ' && paid === 0) {
+      return { success: true, message: 'Đang xử lý thanh toán thẻ' };
+    }
+    
+    // Nếu có voucher, yêu cầu thanh toán hết
+    if (voucherId && paid < order.finalAmount) {
+      return { success: false, message: 'Khi sử dụng voucher, phải thanh toán toàn bộ số tiền' };
+    }
+    
     if (isNaN(paid) || paid < order.finalAmount) {
-      return res.status(400).json({ success: false, message: 'Thanh toán thất bại:  số tiền không hợp lệ' });
+      return { success: false, message: 'Thanh toán thất bại: số tiền không hợp lệ' };
     }
 
     // Lấy danh sách TẤT CẢ bàn chia sẻ order này
@@ -481,6 +578,7 @@ exports.payOrder = async (req, res) => {
         items: order.items,
         totalAmount: order.totalAmount,
         finalAmount: order.finalAmount,
+        orderStatus: 'paid',
         paymentMethod: paymentMethod || 'Tiền mặt',
         paidAt: revenue.paidAt,
         sharedTables: tableNumbersToReset
@@ -551,7 +649,7 @@ exports.payOrder = async (req, res) => {
       sockets.emitTableUpdated(table);
     }
 
-    return res.status(200).json({
+    return {
       success: true,
       message: `Thanh toán thành công.  Đã reset ${resetTables.length} bàn:  ${tableNumbersToReset. join(', ')}`,
       data: { 
@@ -560,11 +658,13 @@ exports.payOrder = async (req, res) => {
         history, 
         dailyReport 
       }
-    });
+    };
+      data: { table: tableReset, revenue, history, dailyReport }
+    
 
   } catch (err) {
     console.error('payOrder error:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    return { success: false, message: err.message };
   }
 };
 

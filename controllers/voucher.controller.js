@@ -1,6 +1,107 @@
 // controllers/voucher.controller.js
 const { voucherModel } = require('../model/voucher.model');
 
+// Helper: Validate voucher (trả về object thay vì response)
+async function validateVoucherHelper(codeOrId, orderValue) {
+  try {
+    let voucher;
+    if (codeOrId.match(/^[0-9a-fA-F]{24}$/)) { // MongoDB ObjectId
+      voucher = await voucherModel.findById(codeOrId).lean().exec();
+    } else {
+      voucher = await voucherModel.findOne({ code: codeOrId }).lean().exec();
+    }
+
+    if (!voucher) {
+      return { success: false, message: 'Mã voucher không tồn tại' };
+    }
+
+    // Kiểm tra các điều kiện
+    const now = new Date();
+    const errors = [];
+
+    if (!voucher.isActive) {
+      errors.push('Voucher đã bị vô hiệu hóa');
+    }
+
+    if (now < new Date(voucher.startDate)) {
+      errors.push('Voucher chưa đến ngày sử dụng');
+    }
+
+    if (now > new Date(voucher.endDate)) {
+      errors.push('Voucher đã hết hạn');
+    }
+
+    if (voucher.usageLimit > 0 && voucher.usedCount >= voucher.usageLimit) {
+      errors.push('Voucher đã hết lượt sử dụng');
+    }
+
+    if (orderValue && orderValue < voucher.minOrderValue) {
+      errors.push(`Giá trị đơn hàng tối thiểu là ${voucher.minOrderValue}`);
+    }
+
+    if (errors.length > 0) {
+      console.log('VOUCHER ERRORS:', errors);
+      return { success: false, message: 'Voucher không hợp lệ', errors };
+    }
+
+    // Tính toán giá trị giảm
+    let discountAmount = 0;
+    if (voucher.discountType === 'percentage') {
+      discountAmount = (orderValue * voucher.discountValue) / 100;
+      if (voucher.maxDiscount > 0 && discountAmount > voucher.maxDiscount) {
+        discountAmount = voucher.maxDiscount;
+      }
+    } else {
+      discountAmount = voucher.discountValue;
+    }
+
+    console.log('DISCOUNT CALC:', {
+      discountType: voucher.discountType,
+      discountValue: voucher.discountValue,
+      maxDiscount: voucher.maxDiscount,
+      orderValue,
+      discountAmount,
+      finalAmount: orderValue - discountAmount
+    });
+
+    return {
+      success: true,
+      data: {
+        voucher,
+        discountAmount,
+        finalAmount: orderValue - discountAmount
+      }
+    };
+  } catch (error) {
+    console.error('validateVoucherHelper error:', error);
+    return { success: false, message: 'Lỗi khi validate voucher' };
+  }
+}
+
+// Helper: Apply voucher (tăng usedCount)
+async function applyVoucherHelper(codeOrId) {
+  try {
+    let voucher;
+    if (codeOrId.match(/^[0-9a-fA-F]{24}$/)) {
+      voucher = await voucherModel.findById(codeOrId);
+    } else {
+      voucher = await voucherModel.findOne({ code: codeOrId });
+    }
+
+    if (!voucher) {
+      return { success: false, message: 'Mã voucher không tồn tại' };
+    }
+
+    voucher.usedCount += 1;
+    await voucher.save();
+
+    return { success: true, data: voucher };
+  } catch (error) {
+    console.error('applyVoucherHelper error:', error);
+    return { success: false, message: 'Lỗi khi áp dụng voucher' };
+  }
+}
+
 // Lấy tất cả voucher
 exports.getAllVouchers = async (req, res) => {
     try {
@@ -307,4 +408,10 @@ exports.applyVoucher = async (req, res) => {
             error: error.message
         });
     }
+};
+
+module.exports = {
+  ...exports,
+  validateVoucherHelper,
+  applyVoucherHelper
 };

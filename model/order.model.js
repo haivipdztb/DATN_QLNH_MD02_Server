@@ -41,7 +41,7 @@ const orderSchema = new db.mongoose.Schema(
     ],
     totalAmount: { type: Number, required: true },
     discount: { type: Number, default: 0 },
-    finalAmount: { type: Number, required: true },
+    finalAmount: { type: Number, required: true, default: 0 },
     paidAmount: { type: Number, default: 0 },
     change: { type: Number, default: 0 },
     paymentMethod: { type: String, required: true },
