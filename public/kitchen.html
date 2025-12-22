@@ -26,6 +26,16 @@
       socket.emit('ack_order', { orderId: data.orderId, stationId, kitchenUserId: 'k1' });
     });
 
+    // Lắng nghe order_created để nhận realtime notification khi có order mới
+    socket.on('order_created', data => {
+      log('order_created: ' + JSON.stringify(data));
+    });
+
+    // Lắng nghe order_updated để nhận realtime notification khi order được cập nhật
+    socket.on('order_updated', data => {
+      log('order_updated: ' + JSON.stringify(data));
+    });
+
     function log(txt) {
       const d = document.createElement('div');
       d.textContent = txt;
