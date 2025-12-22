@@ -1,0 +1,88 @@
+### Salary API Tests
+
+# Lấy danh sách users để lấy employeeId
+GET http://localhost:3000/users
+
+###
+
+# Lấy cấu hình lương của nhân viên (thay {userId} bằng ID thực tế)
+GET http://localhost:3000/salary/config/691cc91527ea8803be9c9fab
+
+###
+
+# Tính lương cho nhân viên
+POST http://localhost:3000/salary/calculate
+Content-Type: application/json
+
+{
+  "employeeId": "691cc91527ea8803be9c9fab",
+  "startDate": "2025-12-01",
+  "endDate": "2025-12-31"
+}
+
+###
+
+# Lấy báo cáo lương tháng
+GET http://localhost:3000/salary/monthly-report?month=12&year=2025
+
+###
+
+# Chốt lương
+POST http://localhost:3000/salary/finalize
+Content-Type: application/json
+
+{
+  "employeeId": "691cc92e27ea8803be9c9faf",
+  "month": 12,
+  "year": 2025,
+  "bonus": 500000,
+  "deductions": 0,
+  "note": "Làm việc tốt tháng 12"
+}
+
+###
+
+# Đánh dấu đã thanh toán (thay {salaryLogId} bằng ID thực tế)
+PUT http://localhost:3000/salary/mark-paid/{salaryLogId}
+
+###
+
+# Lấy lịch sử lương của nhân viên
+GET http://localhost:3000/salary/history/691cc92e27ea8803be9c9faf?limit=12
+
+###
+
+# Test với tất cả nhân viên
+# N00 (cashier)
+POST http://localhost:3000/salary/calculate
+Content-Type: application/json
+
+{
+  "employeeId": "691cc92e27ea8803be9c9faf",
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-30"
+}
+
+###
+
+# Nhân viên 2 (waiter)
+POST http://localhost:3000/salary/calculate
+Content-Type: application/json
+
+{
+  "employeeId": "691cc94627ea8803be9c9fb3",
+  "startDate": "2025-11-01",
+  "endDate": "2025-11-30"
+}
+
+###
+
+# Nhân viên 3 (kitchen)
+POST http://localhost:3000/salary/calculate
+Content-Type: application/json
+
+{
+  "employeeId": "691cc92e27ea8803be9c9faf",
+  "startDate": "2025-10-01",
+  "endDate": "2025-10-31"
+}

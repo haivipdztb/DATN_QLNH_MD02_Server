@@ -1,10 +1,18 @@
 // model/order.model.js
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 // định nghĩa khuôn mẫu cho model (bao gồm các trường snapshot để lưu name/image/price tại thời điểm order)
 const orderSchema = new db.mongoose.Schema(
   {
     tableNumber: { type: Number, required: true },
+    // Danh sách các bàn chia sẻ order này
+    tableNumbers: {
+      type: [Number],
+      default: function() {
+        return [this.tableNumber]; // Mặc định chỉ có bàn gốc
+      }
+    },
     server: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
     cashier: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
     items: [
@@ -21,7 +29,7 @@ const orderSchema = new db.mongoose.Schema(
 
         status: {
           type: String,
-          enum: ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested'],
+          enum: ['pending', 'preparing', 'ready', 'soldout', 'cancel_requested', 'served'],
           default: 'pending'
         }, // Trạng thái món: chờ, đang làm, sẵn sàng, hết món, yêu cầu hủy
 
@@ -41,21 +49,41 @@ const orderSchema = new db.mongoose.Schema(
       type: String, 
       required: true, 
       default: 'pending',
-      enum: ['pending', 'temp_calculation', 'confirmed', 'paid', 'cancelled']
-    }, // pending: chờ xử lý, temp_calculation: tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
+      enum: ['pending', 'temp_calculation', 'temp_bill_printed', 'confirmed', 'paid', 'cancelled']
+    }, // pending: chờ xử lý, temp_calculation: tạm tính, temp_bill_printed: đã in hóa đơn tạm tính, confirmed: đã xác nhận, paid: đã thanh toán, cancelled: đã hủy
     tempCalculationRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu tạm tính
     tempCalculationRequestedAt: { type: Date }, // Thời gian yêu cầu tạm tính
+    checkItemsRequestedAt: { type: Date, default: null }, // Thời gian yêu cầu kiểm tra bàn
+    checkItemsRequestedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null }, // Người yêu cầu kiểm tra bàn
     cancelReason: { type: String }, // Lý do hủy đơn
     cancelledAt: { type: Date }, // Thời gian hủy
     mergedFrom: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
     splitTo: [{ type: db.mongoose.Schema.Types.ObjectId, ref: 'orderModel' }],
     createdAt: { type: Date, default: () => new Date() },
     paidAt: { type: Date }
+    ,
+    // --- Kiểm tra món (cấp order) ---
+    checkItemsStatus: {
+      type: String,
+      enum: ['pending', 'completed', 'acknowledged'],
+      default: 'pending'
+    },
+    checkItemsCompletedAt: { type: Date },
+    checkItemsCompletedBy: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', default: null },
+    checkItemsNote: { type: String, default: '' },
+    // --- In hóa đơn tạm tính ---
+    tempBillPrinted: { type: Boolean, default: false }, // Đã in hóa đơn tạm tính chưa
+    tempBillPrintCount: { type: Number, default: 0 } // Số lần in hóa đơn tạm tính
   },
   {
     collection: 'orders' // tên bảng dữ liệu
   }
 );
+
+
+
+// Thêm soft delete plugin
+orderSchema.plugin(softDeletePlugin);
 
 // tạo model
 let orderModel = db.mongoose.model('orderModel', orderSchema);

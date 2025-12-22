@@ -1,4 +1,5 @@
 const db = require('./db');
+const { softDeletePlugin } = require('../utils/softDelete');
 
 const shiftAssignmentSchema = new db.mongoose.Schema({
   userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: true },
@@ -10,6 +11,9 @@ const shiftAssignmentSchema = new db.mongoose.Schema({
 }, {
   collection: 'shift_assignments'
 });
+
+// Thêm soft delete plugin
+shiftAssignmentSchema.plugin(softDeletePlugin);
 
 const shiftAssignmentModel = db.mongoose.model('shiftAssignmentModel', shiftAssignmentSchema);
 module.exports = { shiftAssignmentModel };

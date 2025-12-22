@@ -302,7 +302,7 @@ exports.updateIngredient = async (req, res) => {
 // Xóa nguyên liệu (Admin)
 exports.deleteIngredient = async (req, res) => {
   try {
-    const deleted = await ingredientModel.findByIdAndDelete(req.params.id).exec();
+    const deleted = await ingredientModel.softDelete(req.params.id).exec();
 
     if (!deleted) {
       return res.status(404).json({

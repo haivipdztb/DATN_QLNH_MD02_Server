@@ -1,57 +1,52 @@
-// sockets.js
+// sockets.js - PHIÊN BẢN HOÀN CHỈNH
 let io;
 
 module.exports = {
   /**
-   * Initialize socket.io with HTTP server instance.
-   * Returns the io instance.
+   * Initialize socket.io with HTTP server instance. 
    */
   init: function (server) {
     const socketIo = require('socket.io');
     io = socketIo(server, {
       cors: {
-        origin: "*", // chỉnh lại origin production
+        origin: "*",
         methods: ["GET", "POST"]
       }
     });
 
     io.on('connection', socket => {
-      console.log('Socket connected:', socket.id);
+      console.log('✅ Socket connected:', socket.id);
 
-      // existing join pattern in your app (restaurant + station)
+      // Join station (for kitchen)
       socket.on('join_station', ({ restaurantId, stationId, token }) => {
-        // TODO: kiểm tra token nếu cần
-        const room = `restaurant:${restaurantId}:station:${stationId}`;
+        const room = `restaurant: ${restaurantId}:station: ${stationId}`;
         socket.join(room);
         console.log(`Socket ${socket.id} joined ${room}`);
       });
 
-      // common join patterns used by various clients (table rooms etc.)
+      // Join table room
       socket.on('join_table', payload => {
-        // payload can be a number or an object { tableNumber: ... }
         try {
-          const tn = (typeof payload === 'number') ? payload : (payload && payload.tableNumber ? payload.tableNumber : null);
+          const tn = (typeof payload === 'number') ? payload : (payload && payload.tableNumber ?  payload.tableNumber : null);
           if (tn !== null) {
             const room = `table_${tn}`;
             socket.join(room);
             console.log(`Socket ${socket.id} joined room ${room}`);
           }
         } catch (e) {
-          console.warn('join_table handler error', e && e.message);
+          console.warn('join_table error', e && e.message);
         }
       });
 
       socket.on('join', payload => {
-        // support both join(number) and join({ tableNumber })
         try {
           const tn = (typeof payload === 'number') ? payload : (payload && payload.tableNumber ? payload.tableNumber : null);
           if (tn !== null) {
-            const room = `table_${tn}`;
-            socket.join(room);
-            console.log(`Socket ${socket.id} join(${tn}) -> joined ${room}`);
+            socket.join(`table_${tn}`);
+            console.log(`Socket ${socket.id} join(${tn})`);
           }
         } catch (e) {
-          console.warn('join handler error', e && e.message);
+          console.warn('join error', e && e.message);
         }
       });
 
@@ -59,39 +54,30 @@ module.exports = {
         try {
           const tn = (typeof payload === 'number') ? payload : (payload && payload.tableNumber ? payload.tableNumber : null);
           if (tn !== null) {
-            const room = `table_${tn}`;
-            socket.join(room);
-            console.log(`Socket ${socket.id} subscribeOrder(${tn}) -> joined ${room}`);
+            socket.join(`table_${tn}`);
+            console.log(`Socket ${socket.id} subscribeOrder(${tn})`);
           }
         } catch (e) {
-          console.warn('subscribeOrder handler error', e && e.message);
+          console.warn('subscribeOrder error', e && e.message);
         }
       });
 
-      // kitchen ack nhận order
       socket.on('ack_order', ({ orderId, stationId, kitchenUserId }) => {
         console.log('ack_order', orderId, stationId, kitchenUserId);
-        // Optionally notify waitstaff or other rooms
-        // io.to(`restaurant:${restaurantId}:waitstaff`).emit('order_ack', { orderId, stationId });
       });
 
-      // kitchen cập nhật trạng thái món (server-side may forward/update DB)
       socket.on('update_status', payload => {
-        // payload = { orderId, itemId, status, updatedBy, tableNumber? }
         console.log('update_status', payload);
         try {
-          // If payload contains tableNumber we forward to table room
           const tn = payload && (payload.tableNumber || payload.tableNumber === 0) ? payload.tableNumber : null;
           if (tn !== null) {
             io.to(`table_${tn}`).emit('order_updated', { tableNumber: tn, items: [payload] });
             console.log(`Forwarded update_status to table_${tn}`);
           } else {
-            // broadcast fallback
-            io.emit('order_updated', { items: [payload] });
-            console.log('Broadcasted update_status as order_updated');
+            io.emit('order_updated', { items:  [payload] });
           }
         } catch (e) {
-          console.warn('update_status forward error', e && e.message);
+          console.warn('update_status error', e && e. message);
         }
       });
 
@@ -104,9 +90,9 @@ module.exports = {
   },
 
   /**
-   * Returns io instance or throws if not initialized.
+   * Get IO instance
    */
-  getIO: function () {
+  getIO:  function () {
     if (!io) {
       throw new Error('Socket.io not initialized!');
     }
@@ -114,56 +100,183 @@ module.exports = {
   },
 
   /**
-   * Emit a generic event to all clients and (optionally) to a specific table room.
-   * payload is expected to contain tableNumber when you want to target a room.
+   * ✅ GENERIC:  Emit any event
    */
-  emitOrderEvent: function (eventName, payload) {
+  emit: function (eventName, payload) {
     if (!io) {
-      console.warn('emitOrderEvent: io not initialized, skipping emit', eventName);
+      console.warn(`⚠️ emit: io not initialized, skipping ${eventName}`);
       return;
     }
     try {
-      // global broadcast
       io.emit(eventName, payload);
-      // if payload contains tableNumber, also emit to the specific table room
-      if (payload && (typeof payload.tableNumber !== 'undefined' || payload.tableNumber === 0)) {
+      
+      // If payload has tableNumber, also emit to that table room
+      if (payload && (typeof payload. tableNumber !== 'undefined')) {
         const tn = payload.tableNumber;
-        io.to(`table_${tn}`).emit(eventName, payload);
+        io. to(`table_${tn}`).emit(eventName, payload);
       }
-      console.log(`emitOrderEvent: emitted ${eventName} (tableNumber=${payload && payload.tableNumber})`);
+      
+      console.log(`✅ emit: ${eventName}`, payload?.tableNumber ? `(table ${payload.tableNumber})` : '');
     } catch (e) {
-      console.warn('emitOrderEvent error', e && e.message);
+      console.warn(`❌ emit error: ${eventName}`, e && e.message);
     }
   },
 
   /**
-   * Convenience: emit order_created
+   * ✅ ORDER EVENTS
    */
   emitOrderCreated: function (payload) {
-    this.emitOrderEvent('order_created', payload);
+    this.emit('order_created', payload);
   },
 
-  /**
-   * Convenience: emit order_updated
-   */
   emitOrderUpdated: function (payload) {
-    this.emitOrderEvent('order_updated', payload);
+    this.emit('order_updated', payload);
+  },
+
+  emitOrderDeleted: function (payload) {
+    this.emit('order_deleted', payload);
+  },
+
+  emitOrderPaid: function (payload) {
+    this.emit('order_paid', payload);
   },
 
   /**
-   * Emit to a specific table room only.
+   * ✅ TABLE EVENTS
    */
-  emitToTable: function (tableNumber, eventName, payload) {
-    if (!io) {
-      console.warn('emitToTable: io not initialized, skipping emit', eventName);
+  emitTableUpdated: function (payload) {
+    this.emit('table_updated', payload);
+  },
+
+  emitTableCreated: function (payload) {
+    this.emit('table_created', payload);
+  },
+
+  emitTableDeleted: function (payload) {
+    this.emit('table_deleted', payload);
+  },
+
+  emitTableReserved: function (payload) {
+    this.emit('table_reserved', payload);
+  },
+
+  emitTableAutoReleased: function (payload) {
+    this.emit('table_auto_released', payload);
+  },
+
+  /**
+   * ✅ CHECK ITEMS EVENTS
+   */
+  emitCheckItemsRequest: function (payload) {
+    this.emit('check_items_request', payload);
+  },
+
+  emitCheckItemsCompleted: function (payload) {
+    this.emit('check_items_completed', payload);
+  },
+
+  /**
+   * ✅ TEMP CALCULATION EVENTS
+   */
+  emitTempCalculationRequest: function (payload) {
+    this.emit('temp_calculation_request', payload);
+  },
+
+  emitTempBillPrinted: function (payload) {
+    this.emit('temp_bill_printed', payload);
+  },
+
+  /**
+   * ✅ KITCHEN EVENTS
+   */
+  emitDishCancelled: function (payload) {
+    this.emit('dish_cancelled', payload);
+  },
+
+  emitCancelDishRequest: function (payload) {
+    this.emit('cancel_dish_request', payload);
+  },
+
+  emitItemStatusChanged:  function (payload) {
+    this.emit('item_status_changed', payload);
+  },
+
+  /**
+   * ✅ MENU EVENTS
+   */
+  emitMenuItemCreated: function (payload) {
+    this.emit('menu_item_created', payload);
+  },
+
+  emitMenuItemUpdated: function (payload) {
+    this.emit('menu_item_updated', payload);
+  },
+
+  emitMenuItemDeleted: function (payload) {
+    this.emit('menu_item_deleted', payload);
+  },
+
+  /**
+   * ✅ INGREDIENT EVENTS
+   */
+  emitIngredientLowStock: function (payload) {
+    this.emit('ingredient_low_stock', payload);
+  },
+
+  emitIngredientTaken: function (payload) {
+    this.emit('ingredient_taken', payload);
+  },
+
+  emitIngredientUpdated: function (payload) {
+    this.emit('ingredient_updated', payload);
+  },
+
+  /**
+   * ✅ USER EVENTS
+   */
+  emitUserCreated: function (payload) {
+    this.emit('user_created', payload);
+  },
+
+  emitUserUpdated: function (payload) {
+    this.emit('user_updated', payload);
+  },
+
+  /**
+   * ✅ SHIFT EVENTS
+   */
+  emitShiftCreated: function (payload) {
+    this.emit('shift_created', payload);
+  },
+
+  emitShiftUpdated: function (payload) {
+    this.emit('shift_updated', payload);
+  },
+
+  emitEmployeeCheckedIn: function (payload) {
+    this.emit('employee_checked_in', payload);
+  },
+
+  /**
+   * Emit to specific room only
+   */
+  emitToRoom: function (room, eventName, payload) {
+    if (! io) {
+      console.warn(`emitToRoom: io not initialized`);
       return;
     }
     try {
-      const room = `table_${tableNumber}`;
-      io.to(room).emit(eventName, payload);
-      console.log(`emitToTable: emitted ${eventName} to ${room}`);
+      io. to(room).emit(eventName, payload);
+      console.log(`✅ emitToRoom: ${eventName} to ${room}`);
     } catch (e) {
-      console.warn('emitToTable error', e && e.message);
+      console.warn(`emitToRoom error`, e && e.message);
     }
+  },
+
+  /**
+   * Emit to specific table
+   */
+  emitToTable: function (tableNumber, eventName, payload) {
+    this.emitToRoom(`table_${tableNumber}`, eventName, payload);
   }
 };

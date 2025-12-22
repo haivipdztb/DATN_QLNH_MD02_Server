@@ -187,7 +187,7 @@ exports.updateReport = async (req, res) => {
 // Xóa báo cáo theo ID
 exports.deleteReport = async (req, res) => {
     try {
-        const deletedReport = await reportModel.findByIdAndDelete(req.params.id);
+        const deletedReport = await reportModel.softDelete(req.params.id);
         if (!deletedReport) {
             return res.status(404).json({
                 success: false,
@@ -486,6 +486,145 @@ exports.getRevenueByDateRange = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Lỗi khi thống kê theo khoảng thời gian',
+            error: error.message
+        });
+    }
+};
+
+// Lấy báo cáo chi tiết với biểu đồ và thống kê đầy đủ
+exports.getDetailedReport = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'Thiếu tham số startDate hoặc endDate'
+            });
+        }
+
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+
+        // Lấy tất cả orders trong khoảng thời gian
+        const orders = await orderModel.find({
+            createdAt: { $gte: start, $lte: end },
+            orderStatus: 'paid'
+        }).populate('items.menuItem');
+
+        // Tính toán các metrics cơ bản
+        const totalOrders = orders.length;
+        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
+        const totalDiscountGiven = orders.reduce((sum, order) => sum + (order.discount || 0), 0);
+        const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+        // Nhóm theo ngày để vẽ biểu đồ
+        const dailyStats = {};
+        const hourlyStats = {};
+        const dishStats = {};
+        const paymentMethodStats = {};
+
+        // Khởi tạo hourly stats
+        for (let hour = 0; hour < 24; hour++) {
+            hourlyStats[hour] = {
+                hour: hour,
+                revenue: 0,
+                orders: 0
+            };
+        }
+
+        orders.forEach(order => {
+            // Daily stats
+            const dateKey = new Date(order.createdAt).toISOString().split('T')[0];
+            if (!dailyStats[dateKey]) {
+                dailyStats[dateKey] = {
+                    date: dateKey,
+                    revenue: 0,
+                    orders: 0,
+                    discount: 0
+                };
+            }
+            dailyStats[dateKey].revenue += order.finalAmount;
+            dailyStats[dateKey].orders += 1;
+            dailyStats[dateKey].discount += order.discount || 0;
+
+            // Hourly stats
+            const hour = new Date(order.createdAt).getHours();
+            hourlyStats[hour].revenue += order.finalAmount;
+            hourlyStats[hour].orders += 1;
+
+            // Payment method stats
+            const paymentMethod = order.paymentMethod || 'cash';
+            if (!paymentMethodStats[paymentMethod]) {
+                paymentMethodStats[paymentMethod] = {
+                    method: paymentMethod,
+                    count: 0,
+                    revenue: 0
+                };
+            }
+            paymentMethodStats[paymentMethod].count += 1;
+            paymentMethodStats[paymentMethod].revenue += order.finalAmount;
+
+            // Dish stats
+            if (order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    const dishName = item.menuItem?.name || item.name || 'Unknown';
+                    const dishId = item.menuItem?._id || item.menuItemId || dishName;
+
+                    if (!dishStats[dishId]) {
+                        dishStats[dishId] = {
+                            name: dishName,
+                            quantity: 0,
+                            revenue: 0
+                        };
+                    }
+                    dishStats[dishId].quantity += item.quantity || 1;
+                    dishStats[dishId].revenue += (item.price || 0) * (item.quantity || 1);
+                });
+            }
+        });
+
+        // Sắp xếp top dishes
+        const topDishes = Object.values(dishStats)
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10);
+
+        // Tính số ngày trong khoảng thời gian
+        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                summary: {
+                    totalRevenue,
+                    totalOrders,
+                    totalDiscountGiven,
+                    averageOrderValue,
+                    period: daysDiff,
+                    averageRevenuePerDay: daysDiff > 0 ? totalRevenue / daysDiff : 0,
+                    averageOrdersPerDay: daysDiff > 0 ? totalOrders / daysDiff : 0
+                },
+                charts: {
+                    dailyRevenue: Object.values(dailyStats).sort((a, b) =>
+                        new Date(a.date) - new Date(b.date)
+                    ),
+                    hourlyRevenue: Object.values(hourlyStats),
+                    topDishes: topDishes,
+                    paymentMethods: Object.values(paymentMethodStats)
+                }
+            },
+            period: {
+                startDate: start,
+                endDate: end
+            }
+        });
+    } catch (error) {
+        console.error('Error in getDetailedReport:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy báo cáo chi tiết',
             error: error.message
         });
     }

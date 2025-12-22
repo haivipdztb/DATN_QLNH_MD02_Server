@@ -1,25 +1,72 @@
+/**
+ * PATCH /orders/:id/print-temp-bill
+ * Thu ngân in hóa đơn tạm tính: cập nhật trạng thái và số lần in
+ */
+const sockets = require('../sockets');
+/**
+ * ✅ PATCH /orders/:id/print-temp-bill
+ */
+exports.printTempBill = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await orderModel. findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
+    }
+
+    order.orderStatus = 'temp_bill_printed';
+    await order.save();
+
+    // ✅✅✅ THÊM: Emit temp_bill_printed
+    try {
+      sockets.emitTempBillPrinted({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        printedAt: new Date()
+      });
+      console.log(`✅ Emitted temp_bill_printed for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit temp_bill_printed:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã in hóa đơn tạm tính',
+      data: order
+    });
+  } catch (error) {
+    console.error('printTempBill error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi in hóa đơn tạm tính',
+      error: error.message
+    });
+  }
+};
 // controllers/order.controller.js
 const { orderModel } = require('../model/order.model');
+
 const { menuModel } = require('../model/menu.model'); 
 const { tableModel } = require('../model/table.model');
-const { Revenue } = require('../model/revenue.model'); 
+const { Revenue } = require('../model/revenue.model');
 const { History } = require('../model/history.model');
 const { reportModel } = require('../model/report.model');
-
-
-
+const { v4: uuidv4 } = require('uuid');
 
 /**
- * Helper: enrich incoming items array by looking up menuModel when menuItem id provided.
+ * Helper:  enrich incoming items array by looking up menuModel when menuItem id provided.  
  */
 async function enrichItemsWithMenuData(rawItems = []) {
   const out = [];
 
   for (const it of rawItems) {
     try {
-      if (!it) continue;
+      if (! it) continue;
 
-      // accept several possible keys for menu id
       const menuId = it.menuItem || it.menuItemId || it.menuId || null;
       let menuDoc = null;
 
@@ -27,17 +74,17 @@ async function enrichItemsWithMenuData(rawItems = []) {
         try {
           menuDoc = await menuModel.findById(menuId).select('name price image imageUrl thumbnail').lean().exec();
         } catch (e) {
-          console.warn('enrichItemsWithMenuData: menu lookup failed for id=', menuId, e && e.message);
+          console.warn('enrichItemsWithMenuData:  menu lookup failed for id=', menuId, e && e.message);
         }
       }
 
       const quantity = (typeof it.quantity === 'number' && it.quantity > 0) ? it.quantity : 1;
 
       let price = 0;
-      if (typeof it.price === 'number' && !isNaN(it.price)) {
+      if (typeof it.price === 'number' && ! isNaN(it.price)) {
         price = it.price;
       } else if (menuDoc && typeof menuDoc.price === 'number') {
-        price = menuDoc.price;
+        price = menuDoc. price;
       }
 
       let menuItemName = '';
@@ -51,18 +98,18 @@ async function enrichItemsWithMenuData(rawItems = []) {
 
       let imageUrl = '';
       if (it.imageUrl && String(it.imageUrl).trim()) imageUrl = String(it.imageUrl).trim();
-      if (!imageUrl && it.image && String(it.image).trim()) imageUrl = String(it.image).trim();
+      if (! imageUrl && it.image && String(it.image).trim()) imageUrl = String(it.image).trim();
       if (!imageUrl && menuDoc) {
-        imageUrl = menuDoc.image || menuDoc.imageUrl || menuDoc.thumbnail || '';
+        imageUrl = menuDoc. image || menuDoc.imageUrl || menuDoc.thumbnail || '';
       }
 
-      const status = it.status ? String(it.status) : 'pending';
+      const status = it.status ?  String(it.status) : 'pending';
       const note = it.note ? String(it.note) : '';
 
       out.push({
         menuItem: menuId || null,
-        menuItemName: menuItemName || '',
-        imageUrl: imageUrl || '',
+        menuItemName:  menuItemName || '',
+        imageUrl:  imageUrl || '',
         quantity,
         price,
         status,
@@ -77,12 +124,14 @@ async function enrichItemsWithMenuData(rawItems = []) {
 }
 
 /**
- * Convenience helper to populate server/cashier and items.menuItem with image fields
+ * Convenience helper to populate server/cashier and items. menuItem with image fields
  */
 function populateOrderQuery(query) {
   return query
     .populate('server', 'name username')
     .populate('cashier', 'name username')
+    .populate('checkItemsRequestedBy', 'name username')
+    .populate('checkItemsCompletedBy', 'name username')
     .populate({
       path: 'items.menuItem',
       select: 'name price image imageUrl thumbnail'
@@ -90,18 +139,18 @@ function populateOrderQuery(query) {
 }
 
 /**
- * GET /orders?tableNumber=...
+ * GET /orders? tableNumber=... 
  */
 exports.getAllOrders = async (req, res) => {
   try {
-   const filter = {};
+    const filter = {};
     if (req.query && typeof req.query.tableNumber !== 'undefined' && req.query.tableNumber !== '') {
       const tn = Number(req.query.tableNumber);
       if (!isNaN(tn)) filter.tableNumber = tn;
       else filter.tableNumber = req.query.tableNumber;
     }
-    
-    // Filter theo orderStatus nếu có
+
+    // Chỉ filter orderStatus khi client truyền lên
     if (req.query && req.query.orderStatus) {
       filter.orderStatus = req.query.orderStatus;
     }
@@ -124,7 +173,7 @@ exports.getAllOrders = async (req, res) => {
 /**
  * GET /orders/:id
  */
-exports.getOrderById = async (req, res) => {
+exports. getOrderById = async (req, res) => {
   try {
     let query = orderModel.findById(req.params.id);
     query = populateOrderQuery(query);
@@ -132,7 +181,7 @@ exports.getOrderById = async (req, res) => {
     const order = await query.lean().exec();
 
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res.status(404).json({ success: false, message:  'Không tìm thấy order' });
     }
 
     return res.status(200).json({ success: true, data: order });
@@ -141,29 +190,16 @@ exports.getOrderById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi lấy chi tiết order',
-      error: error.message
+      error:  error.message
     });
   }
 };
 
 /**
- * Helper to emit socket events (uses req.app.get('io') if available).
- * Emits both a global broadcast and a room-specific event (room name "table_<tableNumber>").
- */
-function emitOrderEvent(req, eventName, payload) {
-  const io = req?.app?.get('io');
-  if (!io) return;
-
-  io.emit(eventName, payload);
-
-  if (payload?.tableNumber !== undefined) {
-    io.to(`table_${payload.tableNumber}`).emit(eventName, payload);
-  }
-}
-
-
-/**
  * POST /orders
+ */
+/**
+ * ✅ POST /orders - Tạo order mới
  */
 exports.createOrder = async (req, res) => {
   try {
@@ -177,7 +213,7 @@ exports.createOrder = async (req, res) => {
     const enrichedItems = await enrichItemsWithMenuData(safeItems);
 
     const computedTotal = enrichedItems.reduce((acc, it) => acc + (Number(it.price || 0) * Number(it.quantity || 0)), 0);
-    const total = (typeof totalAmount === 'number' && !isNaN(totalAmount)) ? totalAmount : computedTotal;
+    const total = (typeof totalAmount === 'number' && ! isNaN(totalAmount)) ? totalAmount : computedTotal;
     const final = (typeof finalAmount === 'number' && !isNaN(finalAmount)) ? finalAmount : total;
 
     const newOrder = new orderModel({
@@ -186,26 +222,41 @@ exports.createOrder = async (req, res) => {
       cashier,
       items: enrichedItems,
       totalAmount: total,
-      discount: discount || 0,
-      finalAmount: final,
+      discount:  discount || 0,
+      finalAmount:  final,
       paymentMethod,
-      orderStatus: orderStatus || 'pending'
+      orderStatus:  orderStatus || 'pending'
     });
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('createOrder: enrichedItems preview:', enrichedItems.slice(0, 10));
+      console.log('createOrder:  enrichedItems preview:', enrichedItems.slice(0, 10));
     }
 
     const saved = await newOrder.save();
 
-    // populate before returning and before emitting
     let query = orderModel.findById(saved._id);
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
 
-    // Emit socket event so clients can update realtime
-    // event names: 'order_created' and 'order_updated' are used by Android client
-    emitOrderEvent(req, 'order_created', populated || saved);
+    // ✅✅✅ THÊM:  Emit order_created event
+    try {
+      console.log('[SOCKET] Emitting orderCreated:', {
+        tableNumber: saved.tableNumber,
+        orderId: saved._id
+      });
+      sockets.emitOrderCreated({
+        _id: saved._id,
+        tableNumber:  saved.tableNumber,
+        items: enrichedItems,
+        totalAmount: total,
+        finalAmount: final,
+        orderStatus: saved.orderStatus,
+        createdAt: saved.createdAt
+      });
+      console.log(`✅ Emitted order_created for table ${saved.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_created:', emitError);
+    }
 
     return res.status(201).json({
       success: true,
@@ -221,16 +272,40 @@ exports.createOrder = async (req, res) => {
     });
   }
 };
-
 /**
- * PUT /orders/:id
+ * ✅ PUT/PATCH /orders/:id hoặc /orders/:orderId
+ * ✅ ĐÃ SỬA:  Hỗ trợ TẤT CẢ các field check items
+ */
+/**
+ * ✅ PUT/PATCH /orders/:id hoặc /orders/:orderId
+ * ✅ ĐÃ SỬA:  Hỗ trợ TẤT CẢ các field check items
  */
 exports.updateOrder = async (req, res) => {
   try {
+    const orderId = req.params.id || req.params.orderId;
+    
+    console.log('========================================');
+    console.log('updateOrder called');
+    console.log('orderId:', orderId);
+    console.log('body:', req.body);
+    console.log('========================================');
+    
     const {
       tableNumber, items, totalAmount, discount,
       finalAmount, paidAmount, change,
-      paymentMethod, orderStatus, paidAt
+      paymentMethod, orderStatus, paidAt,
+      // ✅ Check items fields
+      checkItemsRequestedAt, 
+      checkItemsRequestedBy,
+      checkItemsStatus,
+      checkItemsCompletedBy,
+      checkItemsCompletedAt,
+      checkItemsNote,
+      checkItemsAcknowledgedAt,
+      checkItemsAcknowledgedBy,
+      // Temp calculation fields
+      tempCalculationRequestedAt,
+      tempCalculationRequestedBy
     } = req.body;
 
     console.log('UPDATE ORDER DEBUG:', {
@@ -272,23 +347,76 @@ exports.updateOrder = async (req, res) => {
     if (orderStatus === 'paid' && paidAt) {
       updateData.paidAt = paidAt;
     }
+    const updates = {};
+
+    // Basic fields
+    if (tableNumber !== undefined) updates.tableNumber = tableNumber;
+    if (items !== undefined) updates.items = items;
+    if (totalAmount !== undefined) updates.totalAmount = totalAmount;
+    if (discount !== undefined) updates.discount = discount;
+    if (finalAmount !== undefined) updates.finalAmount = finalAmount;
+    if (paidAmount !== undefined) updates.paidAmount = paidAmount;
+    if (change !== undefined) updates.change = change;
+    if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
+    if (orderStatus !== undefined) updates.orderStatus = orderStatus;
+    if (paidAt !== undefined) updates.paidAt = paidAt;
+
+    // ✅ Check items fields
+    if (checkItemsRequestedAt !== undefined) updates.checkItemsRequestedAt = checkItemsRequestedAt;
+    if (checkItemsRequestedBy !== undefined) updates.checkItemsRequestedBy = checkItemsRequestedBy;
+    if (checkItemsStatus !== undefined) updates.checkItemsStatus = checkItemsStatus;
+    if (checkItemsCompletedBy !== undefined) updates.checkItemsCompletedBy = checkItemsCompletedBy;
+    if (checkItemsCompletedAt !== undefined) updates.checkItemsCompletedAt = checkItemsCompletedAt;
+    if (checkItemsNote !== undefined) updates.checkItemsNote = checkItemsNote;
+    if (checkItemsAcknowledgedAt !== undefined) updates.checkItemsAcknowledgedAt = checkItemsAcknowledgedAt;
+    if (checkItemsAcknowledgedBy !== undefined) updates.checkItemsAcknowledgedBy = checkItemsAcknowledgedBy;
+
+    // Temp calculation fields
+    if (tempCalculationRequestedAt !== undefined) updates.tempCalculationRequestedAt = tempCalculationRequestedAt;
+    if (tempCalculationRequestedBy !== undefined) updates.tempCalculationRequestedBy = tempCalculationRequestedBy;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không có field nào để cập nhật'
+      });
+    }
+
+    console.log('Updates to apply:', updates);
 
     const updated = await orderModel.findByIdAndUpdate(
-      req.params.id,
-      updateData,
+      orderId,
+      { $set: updates },
       { new: true, runValidators: true }
-    ).exec();
+    );
 
     if (!updated) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res. status(404).json({
+        success: false,
+        message:  'Không tìm thấy order'
+      });
     }
 
     let query = orderModel.findById(updated._id);
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
 
-    // Emit socket event for updated order
-    emitOrderEvent(req, 'order_updated', populated || updated);
+    // ✅✅✅ THÊM: Emit order_updated event
+    try {
+      console.log('[SOCKET] Emitting orderUpdated:', {
+        orderId: updated._id,
+        tableNumber: updated.tableNumber
+      });
+      sockets.emitOrderUpdated({
+        _id: updated._id,
+        tableNumber: updated.tableNumber,
+        orderStatus: updated.orderStatus,
+        ... updates
+      });
+      console.log(`✅ Emitted order_updated for order ${updated._id}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_updated:', emitError);
+    }
 
     return res.status(200).json({
       success: true,
@@ -308,13 +436,34 @@ exports.updateOrder = async (req, res) => {
 /**
  * DELETE /orders/:id
  */
+
 exports.deleteOrder = async (req, res) => {
   try {
-    const deleted = await orderModel.findByIdAndDelete(req.params.id).exec();
+    const deleted = await orderModel.findByIdAndDelete(req.params.id);
+
     if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
     }
-    return res.status(200).json({ success: true, message: 'Xóa order thành công', data: deleted });
+
+    // ✅✅✅ THÊM: Emit order_deleted
+    try {
+      sockets. emitOrderDeleted({
+        _id: deleted._id,
+        tableNumber: deleted.tableNumber
+      });
+      console.log(`✅ Emitted order_deleted for order ${deleted._id}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_deleted:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Xóa order thành công',
+      data:  deleted
+    });
   } catch (error) {
     console.error('deleteOrder error:', error);
     return res.status(500).json({
@@ -324,39 +473,16 @@ exports.deleteOrder = async (req, res) => {
     });
   }
 };
-
-// async function resetTableAfterPayment(tableNumber) {
-//   if (tableNumber === undefined || tableNumber === null) return null;
-
-//   try {
-//     const updatedTable = await tableModel.findOneAndUpdate(
-//       { tableNumber: tableNumber }, // Kiểu dữ liệu phải khớp DB
-//       { status: 'available', currentOrder: null, updatedAt: Date.now() },
-//       { new: true }
-//     );
-
-//     console.log('Updated table after payment:', updatedTable);
-//     return updatedTable;
-//   } catch (err) {
-//     console.error('resetTableAfterPayment error:', err);
-//     return null;
-//   }
-// }
-
-/**
- * Normalize phương thức thanh toán
- */
-function normalizePaymentMethod(pm) {
-  if (!pm || typeof pm !== 'string') return 'Tiền mặt';
-  const s = pm.trim().toLowerCase();
-  if (s.includes('qr')) return 'QR';
-  if (s.includes('thẻ') || s.includes('card')) return 'Thẻ ngân hàng';
-  return 'Tiền mặt';
-}
+// ========================================
+// PAYMENT ENDPOINTS
+// ========================================
 
 /**
  * POST /orders/pay
+ * Thanh toán và reset TẤT CẢ bàn trong tableNumbers
  */
+exports.payOrder = async (req, res) => {
+
 /**
  * Reset trạng thái bàn sau khi thanh toán
  * @param {number} tableNumber
@@ -373,6 +499,7 @@ async function resetTableAfterPayment(tableNumber) {
 
   return updatedTable;
 }
+};
 
 
 /**
@@ -427,7 +554,11 @@ exports.payOrder = async (req) => {
       return { success: false, message: 'Thanh toán thất bại: số tiền không hợp lệ' };
     }
 
-    // --- Lưu vào Revenue ---
+    // Lấy danh sách TẤT CẢ bàn chia sẻ order này
+    const tableNumbersToReset = order.tableNumbers || [order.tableNumber];
+    console.log(`[PAY] Order ${order._id} is shared by tables: ${tableNumbersToReset.join(', ')}`);
+
+    // Lưu vào Revenue
     const revenue = new Revenue({
       orderId: order._id,
       tableNumber: order.tableNumber,
@@ -437,7 +568,7 @@ exports.payOrder = async (req) => {
     });
     await revenue.save();
 
-    // --- Tạo History ---
+    // Tạo History
     const history = new History({
       orderId: order._id,
       tableNumber: order.tableNumber,
@@ -447,58 +578,47 @@ exports.payOrder = async (req) => {
         items: order.items,
         totalAmount: order.totalAmount,
         finalAmount: order.finalAmount,
+        orderStatus: 'paid',
         paymentMethod: paymentMethod || 'Tiền mặt',
-        paidAt: revenue.paidAt
+        paidAt: revenue.paidAt,
+        sharedTables: tableNumbersToReset
       }
     });
     await history.save();
 
-    // --- Xóa order khỏi active orders ---
+    // Xóa order
     await orderModel.findByIdAndDelete(orderId);
 
-    // --- Reset bàn ---
-   let tableReset = null;
+    // Reset TẤT CẢ bàn trong tableNumbers
+    const resetTables = [];
+    for (const tableNum of tableNumbersToReset) {
+      const updated = await tableModel.findOneAndUpdate(
+        { tableNumber: tableNum },
+        {
+          status: 'available',
+          currentOrder: null,
+          updatedAt: Date.now()
+        },
+        { new: true }
+      );
+      if (updated) {
+        resetTables.push(updated);
+        console.log(`[PAY] Reset table ${tableNum} to available`);
+      }
+    }
 
-if (order.tableNumber !== undefined && order.tableNumber !== null) {
-  // Đếm xem bàn này còn bao nhiêu hóa đơn khác chưa thanh toán
-  const countOrders = await orderModel.countDocuments({
-    tableNumber: order.tableNumber,
-    _id: { $ne: order._id },        // loại trừ hóa đơn hiện tại
-    status: { $ne: "paid" }         // chỉ đếm hóa đơn chưa thanh toán
-  });
-
-  if (countOrders === 0) {
-    // Không còn hóa đơn nào khác → reset bàn
-    tableReset = await tableModel.findOneAndUpdate(
-      { tableNumber: order.tableNumber },
-      {
-        status: "available",
-        currentOrder: null,
-        updatedAt: Date.now(),
-      },
-      { new: true }
-    );
-  } else {
-    // Vẫn còn hóa đơn khác → giữ nguyên trạng thái
-    console.log(`Bàn ${order.tableNumber} vẫn còn ${countOrders} hóa đơn khác → không reset.`);
-  }
-}
-
-
-    // --- Cập nhật báo cáo ngày ---
+    // Cập nhật báo cáo ngày
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     let dailyReport = await reportModel.findOne({ reportType: 'daily_sales', date: today });
     if (dailyReport) {
-      // Cập nhật các giá trị
       dailyReport.totalRevenue += order.finalAmount;
       dailyReport.totalOrders += 1;
       dailyReport.totalDiscountGiven += order.discount || 0;
       dailyReport.averageOrderValue = dailyReport.totalRevenue / dailyReport.totalOrders;
       dailyReport.details.orders.push(order._id);
     } else {
-      // Tạo báo cáo mới nếu chưa có
       dailyReport = new reportModel({
         reportType: 'daily_sales',
         date: today,
@@ -510,24 +630,37 @@ if (order.tableNumber !== undefined && order.tableNumber !== null) {
         details: { orders: [order._id] }
       });
     }
-    await dailyReport.save();
+    await dailyReport. save();
 
-    // --- Emit realtime ---
-    const io = req.app?.get('io');
-    if (io) {
-      io.emit('order_paid', { tableNumber: order.tableNumber });
-      io.to(`table_${order.tableNumber}`).emit('order_paid', { tableNumber: order.tableNumber });
-
-      if (tableReset) {
-        io.emit('table_updated', tableReset);
-        io.to(`table_${tableReset.tableNumber}`).emit('table_updated', tableReset);
-      }
+    // Emit realtime cho TẤT CẢ bàn - CHUẨN HÓA QUA sockets.js
+    console.log('[SOCKET] Emitting orderPaid:', {
+      orderId: order._id,
+      tableNumber: order.tableNumber
+    });
+    sockets.emitOrderPaid({ 
+      orderId:  order._id,
+      tableNumbers: tableNumbersToReset
+    });
+    for (const table of resetTables) {
+      console.log('[SOCKET] Emitting tableUpdated:', {
+        tableNumber: table.tableNumber,
+        status: table.status
+      });
+      sockets.emitTableUpdated(table);
     }
 
     return {
       success: true,
-      data: { table: tableReset, revenue, history, dailyReport }
+      message: `Thanh toán thành công.  Đã reset ${resetTables.length} bàn:  ${tableNumbersToReset. join(', ')}`,
+      data: { 
+        resetTables, 
+        revenue, 
+        history, 
+        dailyReport 
+      }
     };
+      data: { table: tableReset, revenue, history, dailyReport }
+    
 
   } catch (err) {
     console.error('payOrder error:', err);
@@ -535,7 +668,9 @@ if (order.tableNumber !== undefined && order.tableNumber !== null) {
   }
 };
 
-
+/**
+ * GET /orders/historyod - Danh sách đơn đã thanh toán
+ */
 exports.getPaidOrders = async (req, res) => {
   try {
     const paidOrders = await orderModel
@@ -558,16 +693,19 @@ exports.getPaidOrders = async (req, res) => {
   }
 };
 
+// ========================================
+// REVENUE ENDPOINTS
+// ========================================
+
 /**
- * Thống kê doanh thu theo ngày
- * GET /orders/byDate?fromDate=2025-11-01&toDate=2025-11-24
+ * GET /orders/byDate? fromDate=... &toDate=...
  */
 exports.getRevenueByDate = async (req, res) => {
   try {
     let { fromDate, toDate } = req.query;
 
     if (!fromDate || !toDate) {
-      return res.status(400).json({
+      return res. status(400).json({
         success: false,
         message: 'Cần truyền fromDate và toDate (format YYYY-MM-DD)'
       });
@@ -579,7 +717,7 @@ exports.getRevenueByDate = async (req, res) => {
     const paidOrders = await orderModel
       .find({
         orderStatus: 'paid',
-        paidAt: { $gte: fromDate, $lte: toDate }
+        paidAt: { $gte:  fromDate, $lte: toDate }
       })
       .lean()
       .exec();
@@ -587,19 +725,19 @@ exports.getRevenueByDate = async (req, res) => {
     const revenueMap = {};
 
     paidOrders.forEach(order => {
-      const day = order.paidAt.toISOString().slice(0, 10); // YYYY-MM-DD
+      const day = order.paidAt.toISOString().slice(0, 10);
       if (!revenueMap[day]) {
-        revenueMap[day] = { totalAmount: 0, totalOrders: 0 };
+        revenueMap[day] = { totalAmount: 0, totalOrders:  0 };
       }
-      revenueMap[day].totalAmount += order.finalAmount || 0;
+      revenueMap[day]. totalAmount += order.finalAmount || 0;
       revenueMap[day].totalOrders += 1;
     });
 
     const revenueItems = Object.keys(revenueMap).map(day => ({
-      id: uuidv4(),  // tạo id tự sinh
+      id: uuidv4(),
       date: day,
-      totalAmount: revenueMap[day].totalAmount,
-      totalOrders: revenueMap[day].totalOrders
+      totalAmount:  revenueMap[day].totalAmount,
+      totalOrders:  revenueMap[day].totalOrders
     }));
 
     res.status(200).json({
@@ -618,30 +756,24 @@ exports.getRevenueByDate = async (req, res) => {
 
 /**
  * GET /orders/revenue
- * Trả về mảng RevenueItem { id, date, totalAmount, totalOrders } 
- * từ tất cả các ngày đã thanh toán
  */
-const { v4: uuidv4 } = require('uuid'); // cài package uuid: npm install uuid
-
 exports.getRevenueFromOrders = async (req, res) => {
   try {
-    const paidOrders = await orderModel.find({ orderStatus: 'paid' }).lean().exec();
+    const paidOrders = await orderModel. find({ orderStatus: 'paid' }).lean().exec();
 
     const revenueMap = {};
 
-    // Gom nhóm theo ngày
     paidOrders.forEach(order => {
-      const day = order.paidAt.toISOString().slice(0, 10); // YYYY-MM-DD
+      const day = order.paidAt.toISOString().slice(0, 10);
       if (!revenueMap[day]) {
         revenueMap[day] = { totalAmount: 0, totalOrders: 0 };
       }
       revenueMap[day].totalAmount += order.finalAmount || 0;
-      revenueMap[day].totalOrders += 1;
+      revenueMap[day]. totalOrders += 1;
     });
 
-    // Chuyển sang mảng RevenueItem với id tự sinh
     const revenueItems = Object.keys(revenueMap).map(day => ({
-      id: uuidv4(),  // tự sinh id
+      id: uuidv4(),
       date: day,
       totalAmount: revenueMap[day].totalAmount,
       totalOrders: revenueMap[day].totalOrders
@@ -659,70 +791,288 @@ exports.getRevenueFromOrders = async (req, res) => {
       error: error.message
     });
   }
-};
+}; 
+
+// ========================================
+// SPECIAL FEATURES
+// ========================================
 
 /**
- * POST /orders/:id/request-temp-calculation
- * Chuyển order sang trạng thái "hóa đơn tạm tính" và gửi thông báo cho thu ngân
+ * POST /orders/: id/request-temp-calculation
+ */
+/**
+ * ✅ POST /orders/:id/request-temp-calculation
  */
 exports.requestTempCalculation = async (req, res) => {
   try {
-    const { requestedBy } = req.body; // ID nhân viên yêu cầu tạm tính
-    const orderId = req.params.id;
+    const { id } = req.params;
+    const { requestedBy } = req.body;
 
-    // Tìm và cập nhật order
-    const order = await orderModel.findById(orderId);
+    const order = await orderModel.findById(id);
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
-    }
-
-    // Kiểm tra trạng thái order
-    if (order.orderStatus === 'paid') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Order đã thanh toán, không thể yêu cầu tạm tính' 
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
       });
     }
 
-    if (order.orderStatus === 'cancelled') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Order đã bị hủy, không thể yêu cầu tạm tính' 
-      });
-    }
-
-    // Cập nhật trạng thái sang temp_calculation
-    order.orderStatus = 'temp_calculation';
+    order.tempCalculationRequestedAt = new Date();
     order.tempCalculationRequestedBy = requestedBy || null;
-    order.tempCalculationRequestedAt = new Date(); // Đã đúng thời gian thực
     await order.save();
 
-    // Populate để lấy đầy đủ thông tin
-    let query = orderModel.findById(order._id);
-    query = populateOrderQuery(query);
-    query = query.populate('tempCalculationRequestedBy', 'name username');
-    const populated = await query.lean().exec();
-
-    // Emit Socket.IO event cho thu ngân
-    emitOrderEvent(req, 'temp_calculation_requested', {
-      orderId: order._id,
-      tableNumber: order.tableNumber,
-      order: populated,
-      requestedBy: requestedBy,
-      requestedAt: order.tempCalculationRequestedAt
-    });
+    // ✅✅✅ THÊM: Emit temp_calculation_request
+    try {
+      sockets.emitTempCalculationRequest({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        requestedAt: order.tempCalculationRequestedAt,
+        requestedBy:  requestedBy
+      });
+      console.log(`✅ Emitted temp_calculation_request for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit temp_calculation_request:', emitError);
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Đã chuyển sang trạng thái hóa đơn tạm tính và gửi thông báo cho thu ngân',
-      data: populated
+      message: 'Đã gửi yêu cầu tạm tính',
+      data: order
     });
   } catch (error) {
     console.error('requestTempCalculation error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Lỗi khi yêu cầu tạm tính',
+      message: 'Lỗi khi tạo yêu cầu tạm tính',
+      error:  error.message
+    });
+  }
+};
+/**
+ * GET /orders/check-items-requests/count
+ * Đếm số lượng yêu cầu kiểm tra bàn (orders có checkItemsRequestedAt không null)
+ */
+exports.getCheckItemsRequestsCount = async (req, res) => {
+  try {
+    const count = await orderModel.countDocuments({
+      checkItemsRequestedAt: { $ne: null }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        count: count
+      }
+    });
+  } catch (error) {
+    console.error('getCheckItemsRequestsCount error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi đếm số lượng yêu cầu kiểm tra bàn',
       error: error.message
     });
   }
 };
+
+/**
+ * GET /orders/check-items-requests
+ * Lấy danh sách các orders có yêu cầu kiểm tra bàn
+ */
+exports.getCheckItemsRequests = async (req, res) => {
+  try {
+    let query = orderModel.find({
+      checkItemsRequestedAt:  { $ne: null }
+    }).sort({ checkItemsRequestedAt: -1 });
+    
+    query = populateOrderQuery(query);
+    const orders = await query.lean().exec();
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+      count: orders.length
+    });
+  } catch (error) {
+    console.error('getCheckItemsRequests error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi lấy danh sách yêu cầu kiểm tra bàn',
+      error: error. message
+    });
+  }
+};
+
+/**
+ * PATCH /orders/:orderId/request-check-items
+ * Thu ngân gửi yêu cầu kiểm tra bàn
+ */
+/**
+ * ✅ POST /orders/:orderId/request-check-items
+ */
+exports.requestCheckItems = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { requestedBy } = req.body;
+
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
+    }
+
+    order.checkItemsRequestedAt = new Date();
+    order.checkItemsRequestedBy = requestedBy || null;
+    order.checkItemsStatus = 'pending';
+    await order.save();
+
+    // ✅✅✅ THÊM: Emit check_items_request
+    try {
+      sockets. emitCheckItemsRequest({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        requestedAt: order.checkItemsRequestedAt,
+        requestedBy:  requestedBy
+      });
+      console.log(`✅ Emitted check_items_request for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit check_items_request:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã gửi yêu cầu kiểm tra bàn',
+      data: order
+    });
+  } catch (error) {
+    console.error('requestCheckItems error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tạo yêu cầu kiểm tra',
+      error: error.message
+    });
+  }
+};
+/**
+ * PATCH /orders/:orderId/complete-check-items
+ * Phục vụ xác nhận đã kiểm tra bàn
+ */
+/**
+ * ✅ PATCH /orders/:orderId/complete-check-items
+ */
+exports.completeCheckItems = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { completedBy, note } = req.body;
+
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
+    }
+
+    order.checkItemsStatus = 'completed';
+    order.checkItemsCompletedBy = completedBy || null;
+    order.checkItemsCompletedAt = new Date();
+    order.checkItemsNote = note || '';
+    await order.save();
+
+    // ✅✅✅ THÊM: Emit check_items_completed
+    try {
+      sockets.emitCheckItemsCompleted({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        completedBy: completedBy,
+        completedAt: order.checkItemsCompletedAt,
+        note: note
+      });
+      console.log(`✅ Emitted check_items_completed for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit check_items_completed:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã hoàn thành kiểm tra bàn',
+      data: order
+    });
+  } catch (error) {
+    console.error('completeCheckItems error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi hoàn thành kiểm tra',
+      error: error.message
+    });
+  }
+};
+/**
+ * PATCH /orders/:orderId/acknowledge-check-items
+ * Thu ngân xác nhận đã nhận kết quả kiểm tra
+ */
+exports.acknowledgeCheckItems = async (req, res) => {
+  try {
+    const { orderId } = req. params;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message:  'Order không tồn tại' });
+
+    order.checkItemsStatus = 'acknowledged';
+    // giữ lại checkItemsRequestedBy/At để lưu vết
+
+    await order.save();
+    sockets.emit('order_check_items_acknowledged', {
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      checkItemsStatus: order.checkItemsStatus
+    });
+    return res.status(200).json({ success: true, message: 'Đã xác nhận đã nhận kết quả kiểm tra', data: order });
+  } catch (error) {
+    console.error('acknowledgeCheckItems error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi xác nhận đã nhận kết quả kiểm tra', error: error. message });
+  }
+};
+
+/**
+ * PATCH /orders/:orderId/check-items
+ * Phục vụ xác nhận kiểm tra bàn:  cập nhật trạng thái kiểm tra, thời gian và ghi chú ở cấp order
+ */
+exports.checkOrderItems = async (req, res) => {
+  try {
+    const { orderId } = req. params;
+    const { checkItemsNote } = req.body;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: 'Order không tồn tại' });
+
+    order.checkItemsStatus = 'completed';
+    order.checkItemsCompletedAt = new Date();
+    order.checkItemsNote = checkItemsNote || '';
+
+    await order.save();
+
+    // Phát socket event cho thu ngân (đồng nhất qua sockets.js)
+    sockets.emit('order_items_checked', {
+      orderId: order._id,
+      tableNumber: order.tableNumber,
+      checkItemsStatus: order.checkItemsStatus,
+      checkItemsCompletedAt: order.checkItemsCompletedAt,
+      checkItemsNote: order.checkItemsNote
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã xác nhận kiểm tra bàn',
+      data: {
+        orderId: order._id,
+        checkItemsStatus: order.checkItemsStatus,
+        checkItemsCompletedAt: order.checkItemsCompletedAt,
+        checkItemsNote: order.checkItemsNote
+      }
+    });
+  } catch (error) {
+    console.error('checkOrderItems error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi xác nhận kiểm tra bàn', error: error.message });
+  }
+};
+
+module.exports = exports;

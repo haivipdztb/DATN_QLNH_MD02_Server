@@ -27,6 +27,7 @@ var shiftsRouter = require('./routes/shifts');
 var shiftAssignmentsRouter = require('./routes/shiftAssignments');
 var payrollRouter = require('./routes/payroll');
 var historyRouter = require('./routes/history');
+var recipesRouter = require('./routes/recipes');
 var paymentRouter = require('./routes/payment');
 
 var attendanceRouter = require('./routes/attendance');
@@ -63,9 +64,10 @@ app.use('/salary', salaryRouter);
 app.use('/attendance', attendanceRouter);
 app.use('/shifts', shiftsRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);
-app.use('/payroll', payrollRouter); 
-app.use('/ingredients', ingredientsRouter); 
+app.use('/payroll', payrollRouter);
+app.use('/ingredients', ingredientsRouter);
 app.use('/history', historyRouter);
+app.use('/recipes', recipesRouter);
 
 app.use('/attendance', attendanceRouter);
 app.use('/shift-assignments', shiftAssignmentsRouter);
@@ -73,7 +75,12 @@ app.use('/payroll', payrollRouter);
 app.use('/payment', paymentRouter);
 
 // catch 404 and forward to error handler
+
+// Middleware 404: trả về JSON nếu là API, tránh trả về HTML cho client mobile/app
 app.use(function (req, res, next) {
+  if (req.originalUrl.startsWith('/api') || req.headers.accept?.includes('application/json')) {
+    return res.status(404).json({ success: false, message: 'Not Found', url: req.originalUrl });
+  }
   next(createError(404));
 });
 

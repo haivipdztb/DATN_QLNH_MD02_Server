@@ -22,35 +22,12 @@ app.set('port', port);
  * Create HTTP server.
  */
 
+
 var server = http.createServer(app);
 
-// Khởi socket.io (với CORS permissive để tiện dev)
-let io;
-try {
-  io = new Server(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
-      credentials: true
-    }
-  });
-
-  // expose io cho các controller qua app.set('io', io)
-  app.set('io', io);
-
-  io.on('connection', socket => {
-    console.log('socket connected', socket.id);
-    socket.on('join_room', payload => {
-      try {
-        const room = payload && payload.room ? payload.room : payload;
-        if (room) socket.join(room);
-      } catch (e) { console.warn('join_room error', e); }
-    });
-    socket.on('disconnect', () => console.log('socket disconnected', socket.id));
-  });
-} catch (e) {
-  console.warn('socket.io not started:', e && e.message ? e.message : e);
-}
+// Khởi tạo socket.io qua module sockets.js
+const sockets = require('../sockets');
+sockets.init(server);
 
 // Listen một lần duy nhất
 server.listen(port, () => {
