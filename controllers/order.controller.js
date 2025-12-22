@@ -504,9 +504,9 @@ async function resetTableAfterPayment(tableNumber) {
 
 /**
  * POST /orders/pay
+ * Thanh toán và reset TẤT CẢ bàn trong tableNumbers
  */
-
-exports.payOrder = async (req) => {
+exports.payOrder = async (req, res) => {
   console.log('--- payOrder called ---', req.body);
 
   try {
