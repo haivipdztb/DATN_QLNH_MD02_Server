@@ -1,4 +1,5 @@
 const {menuModel} = require('../model/menu.model');
+const sockets = require('../sockets'); // ✅ THÊM IMPORT
 
 // Xem danh sách tất cả menu items
 exports.getAllMenuItems = async (req, res) => {
@@ -40,7 +41,7 @@ exports.getMenuItemById = async (req, res) => {
     }
 };
 
-// Thêm menu item mới
+// ✅ Thêm menu item mới - ĐÃ THÊM SOCKET EMIT
 exports.createMenuItem = async (req, res) => {
     try {
         const {name, price, category, image, status} = req.body;
@@ -49,27 +50,42 @@ exports.createMenuItem = async (req, res) => {
             price,
             category,
             image,
-            status: status || 'available'
+            status:  status || 'available'
         });
         await newMenuItem.save();
-        res.status(201).json({
+
+        // ✅✅✅ THÊM:  Emit menu_item_created
+        try {
+            sockets.emitMenuItemCreated({
+                _id: newMenuItem._id,
+                name: newMenuItem.name,
+                price: newMenuItem.price,
+                category: newMenuItem.category,
+                status: newMenuItem.status
+            });
+            console.log(`✅ Emitted menu_item_created:  ${newMenuItem.name}`);
+        } catch (emitError) {
+            console.warn('⚠️ Failed to emit menu_item_created:', emitError);
+        }
+
+        res. status(201).json({
             success: true,
-            message: 'Thêm menu item thành công',
+            message:  'Thêm menu item thành công',
             data: newMenuItem
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Lỗi khi thêm menu item',
+            message:  'Lỗi khi thêm menu item',
             error: error.message
         });
     }
 };
 
-// Sửa menu item theo ID
-exports.updateMenuItem = async (req, res) => {
+// ✅ Sửa menu item theo ID - ĐÃ THÊM SOCKET EMIT
+exports. updateMenuItem = async (req, res) => {
     try {
-        const {name, price, category, image, status} = req.body;
+        const {name, price, category, image, status} = req. body;
         const updatedMenuItem = await menuModel.findByIdAndUpdate(
             req.params.id,
             {name, price, category, image, status},
@@ -81,6 +97,21 @@ exports.updateMenuItem = async (req, res) => {
                 message: 'Không tìm thấy menu item'
             });
         }
+
+        // ✅✅✅ THÊM: Emit menu_item_updated
+        try {
+            sockets.emitMenuItemUpdated({
+                _id: updatedMenuItem._id,
+                name: updatedMenuItem. name,
+                price: updatedMenuItem.price,
+                category: updatedMenuItem.category,
+                status: updatedMenuItem.status
+            });
+            console.log(`✅ Emitted menu_item_updated: ${updatedMenuItem.name}`);
+        } catch (emitError) {
+            console.warn('⚠️ Failed to emit menu_item_updated:', emitError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Cập nhật menu item thành công',
@@ -89,13 +120,13 @@ exports.updateMenuItem = async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Lỗi khi cập nhật menu item',
+            message:  'Lỗi khi cập nhật menu item',
             error: error.message
         });
     }
 };
 
-// Xóa menu item theo ID
+// ✅ Xóa menu item theo ID - ĐÃ THÊM SOCKET EMIT
 exports.deleteMenuItem = async (req, res) => {
     try {
         const deletedMenuItem = await menuModel.softDelete(req.params.id);
@@ -105,6 +136,18 @@ exports.deleteMenuItem = async (req, res) => {
                 message: 'Không tìm thấy menu item'
             });
         }
+
+        // ✅✅✅ THÊM: Emit menu_item_deleted
+        try {
+            sockets.emitMenuItemDeleted({
+                _id: deletedMenuItem._id,
+                name: deletedMenuItem. name
+            });
+            console.log(`✅ Emitted menu_item_deleted: ${deletedMenuItem.name}`);
+        } catch (emitError) {
+            console.warn('⚠️ Failed to emit menu_item_deleted:', emitError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Xóa menu item thành công',

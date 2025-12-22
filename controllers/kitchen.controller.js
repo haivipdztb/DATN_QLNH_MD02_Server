@@ -1,10 +1,11 @@
 const { orderModel } = require('../model/order.model');
+const sockets = require('../sockets');
 
 /**
  * controllers/kitchen.controller.js
  * - Hỗ trợ tìm item bằng _id hoặc menuItem/menuItemId
  * - Normalize status từ các dạng VN/EN sang values chuẩn: pending, preparing, ready, soldout
- * - Broadcast 'order_updated' tới room 'phucvu' nếu io được set trên app
+ * - Broadcast 'order_updated', 'dish_cancelled', 'cancel_dish_request' tới đúng room qua sockets
  */
 
 // Helper: chuẩn hóa trạng thái nhận được từ client
@@ -19,25 +20,19 @@ function normalizeStatus(input) {
   if (s === 'soldout' || s === 'het' || s === 'hết' || s === 'đã hết') return 'soldout';
   if (s === 'cancel_requested' || s === 'yeu cau huy' || s === 'yêu cầu hủy') return 'cancel_requested';
   if (s === 'served' || s === 'đã phục vụ' || s === 'da phuc vu') return 'served';
-  return s; // trả về nguyên dạng đã lowercase nếu không map được (sẽ validate sau)
+  return s;
 }
 
 // Helper để tìm OrderItem trong order (hỗ trợ subdoc _id hoặc match menuItem/menuItemId)
 function findOrderItem(order, itemId) {
   if (!order || !order.items) return null;
-  // 1) thử tìm theo subdocument _id
   try {
     const bySubId = order.items.id(itemId);
     if (bySubId) return bySubId;
-  } catch (e) {
-    // ignore
-  }
-
-  // 2) thử match theo menuItem (ObjectId) hoặc menuItemId field hoặc nested id
+  } catch (e) {}
   const found = order.items.find(it => {
     if (!it) return false;
     try {
-      // it.menuItem có thể là ObjectId hoặc object; try common variants
       const menuRef = it.menuItem || it.menuItemId || (it.menuItem && it.menuItem._id) || (it.menuItem && it.menuItem.id);
       if (!menuRef) return false;
       return String(menuRef) === String(itemId);
@@ -48,19 +43,15 @@ function findOrderItem(order, itemId) {
   return found || null;
 }
 
-// Các handler:
+// --- MAIN HANDLERS ---
 
 async function getAllKitchenOrders(req, res) {
   try {
-    const orders = await orderModel.find({
-      orderStatus: { $in: ['pending', 'preparing'] }
-    })
+    const orders = await orderModel.find({ orderStatus: { $in: ['pending', 'preparing'] } })
       .populate('items.menuItem')
       .populate('server', 'name')
       .sort({ createdAt: 1 })
-      .lean()
-      .exec();
-
+      .lean().exec();
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     console.error('getAllKitchenOrders error:', error);
@@ -73,13 +64,10 @@ async function getKitchenOrderById(req, res) {
     const order = await orderModel.findById(req.params.id)
       .populate('items.menuItem')
       .populate('server', 'name')
-      .lean()
-      .exec();
-
+      .lean().exec();
     if (!order) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
     }
-
     return res.status(200).json({ success: true, data: order });
   } catch (error) {
     console.error('getKitchenOrderById error:', error);
@@ -106,42 +94,31 @@ async function updateItemStatus(req, res) {
     }
 
     const order = await orderModel.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
-    }
+    if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
 
-    // Tìm item theo nhiều cách
     let item = findOrderItem(order, itemId);
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy món trong order' });
-    }
+    if (!item) return res.status(404).json({ success: false, message: 'Không tìm thấy món trong order' });
 
     item.status = normalized;
     await order.save();
-
-    // Cập nhật trạng thái order tổng thể
-    try { await updateOrderStatus(order); } catch (e) { console.warn('updateOrderStatus warning', e); }
+    try { await updateOrderStatus(order); } catch (e) {}
 
     const updatedOrder = await orderModel.findById(orderId)
       .populate('items.menuItem')
       .populate('server', 'name')
-      .lean()
-      .exec();
+      .lean().exec();
 
-    // Broadcast tới room 'phucvu' nếu server expose io
+    // ✅ Emit order_updated tới đúng các client (room table và toàn bộ - cho realtime notifications trên app)
     try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io) {
-        const payload = {
-          orderId: String(orderId),
-          itemId: String(itemId),
-          status: normalized,
-          tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined
-        };
-        io.to('phucvu').emit('order_updated', payload);
-      }
-    } catch (e) {
-      console.warn('Socket emit failed in updateItemStatus:', e);
+      sockets.emitOrderUpdated({
+        orderId: String(orderId),
+        itemId: String(itemId),
+        status: normalized,
+        tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined,
+        updatedOrder,
+      });
+    } catch (emitError) {
+      console.warn('Socket emit failed in updateItemStatus:', emitError);
     }
 
     return res.status(200).json({ success: true, message: 'Cập nhật trạng thái món thành công', data: updatedOrder });
@@ -165,28 +142,26 @@ async function updateAllItemsStatus(req, res) {
     }
 
     const order = await orderModel.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
-    }
+    if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
 
     order.items.forEach(item => { item.status = normalized; });
     await order.save();
-    try { await updateOrderStatus(order); } catch (e) { console.warn('updateOrderStatus warning', e); }
+    try { await updateOrderStatus(order); } catch (e) {}
 
     const updatedOrder = await orderModel.findById(orderId)
       .populate('items.menuItem')
       .populate('server', 'name')
-      .lean()
-      .exec();
+      .lean().exec();
 
     try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io) {
-        const payload = { orderId: String(orderId), status: normalized, tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined };
-        io.to('phucvu').emit('order_updated', payload);
-      }
-    } catch (e) {
-      console.warn('Socket emit failed in updateAllItemsStatus:', e);
+      sockets.emitOrderUpdated({
+        orderId: String(orderId),
+        status: normalized,
+        tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined,
+        updatedOrder,
+      });
+    } catch (emitError) {
+      console.warn('Socket emit failed in updateAllItemsStatus:', emitError);
     }
 
     return res.status(200).json({ success: true, message: 'Cập nhật trạng thái tất cả món thành công', data: updatedOrder });
@@ -209,8 +184,18 @@ async function startPreparing(req, res) {
     const updatedOrder = await orderModel.findById(orderId)
       .populate('items.menuItem')
       .populate('server', 'name')
-      .lean()
-      .exec();
+      .lean().exec();
+
+    try {
+      sockets.emitOrderUpdated({
+        orderId: String(orderId),
+        status: 'preparing',
+        tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined,
+        updatedOrder,
+      });
+    } catch (emitError) {
+      console.warn('Socket emit failed in startPreparing:', emitError);
+    }
 
     return res.status(200).json({ success: true, message: 'Đã bắt đầu chuẩn bị order', data: updatedOrder });
   } catch (error) {
@@ -232,8 +217,18 @@ async function markOrderReady(req, res) {
     const updatedOrder = await orderModel.findById(orderId)
       .populate('items.menuItem')
       .populate('server', 'name')
-      .lean()
-      .exec();
+      .lean().exec();
+
+    try {
+      sockets.emitOrderUpdated({
+        orderId: String(orderId),
+        status: 'ready',
+        tableNumber: updatedOrder ? updatedOrder.tableNumber : undefined,
+        updatedOrder,
+      });
+    } catch (emitError) {
+      console.warn('Socket emit failed in markOrderReady:', emitError);
+    }
 
     return res.status(200).json({ success: true, message: 'Order đã sẵn sàng phục vụ', data: updatedOrder });
   } catch (error) {
@@ -249,8 +244,7 @@ async function getOrdersByStatus(req, res) {
       .populate('items.menuItem')
       .populate('server', 'name')
       .sort({ createdAt: 1 })
-      .lean()
-      .exec();
+      .lean().exec();
 
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
@@ -278,43 +272,28 @@ async function updateOrderStatus(order) {
   }
 }
 
-// Bếp hủy món (do khách đợi lâu, không muốn nữa)
+// --- DISH CANCEL HANDLERS ---
+
+// Hủy món ăn (Bếp bấm hủy)
 async function cancelDish(req, res) {
   try {
     const { orderId, itemId } = req.params;
-    const { reason } = req.body; // Lý do hủy món
+    const { reason } = req.body;
 
     const order = await orderModel.findById(orderId);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy order'
-      });
-    }
+    if (!order) return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
 
-    // Tìm món cần hủy
     const item = findOrderItem(order, itemId);
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy món ăn trong order'
-      });
-    }
+    if (!item) return res.status(404).json({ success: false, message: 'Không tìm thấy món ăn trong order' });
 
-    // Không cho hủy món đã làm xong
     if (item.status === 'ready') {
-      return res.status(400).json({
-        success: false,
-        message: 'Không thể hủy món đã hoàn thành'
-      });
+      return res.status(400).json({ success: false, message: 'Không thể hủy món đã hoàn thành' });
     }
 
-    // Lưu thông tin món bị hủy vào note
     const cancelInfo = `[HỦY] ${reason || 'Khách không muốn nữa'}`;
     item.note = item.note ? `${item.note} | ${cancelInfo}` : cancelInfo;
-    item.status = 'soldout'; // Đánh dấu là soldout để không hiện trong bếp nữa
+    item.status = 'soldout';
 
-    // Tính lại tổng tiền (trừ món bị hủy)
     let newTotal = 0;
     order.items.forEach(it => {
       if (it.status !== 'soldout') {
@@ -327,15 +306,17 @@ async function cancelDish(req, res) {
 
     await order.save();
 
-    // Broadcast nếu có socket.io
-    const io = req.app.get('io');
-    if (io) {
-      io.to('phucvu').emit('dish_cancelled', {
+    // ✅ Emit dish_cancelled event
+    try {
+      sockets.emitDishCancelled({
         orderId: order._id,
         itemId: item._id,
         itemName: item.menuItemName,
-        reason: reason || 'Khách không muốn nữa'
+        reason: reason || 'Khách không muốn nữa',
+        tableNumber: order.tableNumber
       });
+    } catch (emitError) {
+      console.warn('Socket emit failed in cancelDish:', emitError);
     }
 
     return res.status(200).json({
@@ -352,11 +333,7 @@ async function cancelDish(req, res) {
     });
   } catch (error) {
     console.error('cancelDish error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi khi hủy món',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Lỗi khi hủy món', error: error.message });
   }
 }
 
@@ -364,81 +341,60 @@ async function cancelDish(req, res) {
 async function requestCancelDish(req, res) {
   try {
     const { orderId, itemId } = req.params;
-    const { requestedBy, reason } = req.body; // ID nhân viên và lý do
+    const { requestedBy, reason } = req.body;
 
     const order = await orderModel.findById(orderId);
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy order'
-      });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
     }
 
-    // Tìm món cần yêu cầu hủy
     const item = findOrderItem(order, itemId);
     if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy món ăn trong order'
-      });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy món ăn trong order' });
     }
 
-    // Kiểm tra trạng thái món
     if (item.status === 'ready') {
-      return res.status(400).json({
-        success: false,
-        message: 'Món đã hoàn thành, không thể yêu cầu hủy'
-      });
+      return res.status(400).json({ success: false, message: 'Món đã hoàn thành, không thể yêu cầu hủy' });
     }
-
     if (item.status === 'soldout') {
-      return res.status(400).json({
-        success: false,
-        message: 'Món đã bị hủy trước đó'
-      });
+      return res.status(400).json({ success: false, message: 'Món đã bị hủy trước đó' });
     }
-
     if (item.status === 'cancel_requested') {
-      return res.status(400).json({
-        success: false,
-        message: 'Món đã được yêu cầu hủy trước đó'
-      });
+      return res.status(400).json({ success: false, message: 'Món đã được yêu cầu hủy trước đó' });
     }
 
-    // Cập nhật trạng thái thành cancel_requested
     item.status = 'cancel_requested';
     item.cancelRequestedBy = requestedBy || null;
-    item.cancelRequestedAt = new Date(); // Đã đúng thời gian thực
+    item.cancelRequestedAt = new Date();
     item.cancelReason = reason || 'Khách yêu cầu hủy';
 
     await order.save();
 
-    // Populate để lấy thông tin đầy đủ
     const updatedOrder = await orderModel.findById(orderId)
       .populate('items.menuItem')
       .populate('items.cancelRequestedBy', 'name username')
       .populate('server', 'name')
-      .lean()
-      .exec();
+      .lean().exec();
 
-    // Emit Socket.IO event cho bếp
+    // ✅ Emit cancel_dish_request socket event cho bếp (và phục vụ)
     try {
-      const io = req.app && req.app.get ? req.app.get('io') : null;
-      if (io) {
-        const payload = {
-          orderId: order._id,
-          tableNumber: order.tableNumber,
-          itemId: item._id,
-          itemName: item.menuItemName,
-          reason: item.cancelReason,
-          requestedBy: requestedBy,
-          requestedAt: item.cancelRequestedAt
-        };
-        io.to('bep').emit('cancel_dish_requested', payload); // Gửi cho bếp
-        io.to('phucvu').emit('order_updated', { orderId: order._id, tableNumber: order.tableNumber }); // Cập nhật cho phục vụ
-      }
-    } catch (e) {
-      console.warn('Socket emit failed in requestCancelDish:', e);
+      sockets.emitCancelDishRequest({
+        orderId: order._id,
+        itemId: item._id,
+        itemName: item.menuItemName,
+        tableNumber: order.tableNumber,
+        reason: item.cancelReason,
+        requestedBy,
+        requestedAt: item.cancelRequestedAt
+      });
+      sockets.emitOrderUpdated({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        itemId: item._id,
+        status: item.status
+      });
+    } catch (emitError) {
+      console.warn('Socket emit failed in requestCancelDish:', emitError);
     }
 
     return res.status(200).json({
@@ -457,14 +413,11 @@ async function requestCancelDish(req, res) {
     });
   } catch (error) {
     console.error('requestCancelDish error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi khi gửi yêu cầu hủy món',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Lỗi khi gửi yêu cầu hủy món', error: error.message });
   }
 }
 
+// Export all handlers
 module.exports = {
   getAllKitchenOrders,
   getKitchenOrderById,

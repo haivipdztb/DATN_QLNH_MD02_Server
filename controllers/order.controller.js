@@ -2,31 +2,41 @@
  * PATCH /orders/:id/print-temp-bill
  * Thu ngân in hóa đơn tạm tính: cập nhật trạng thái và số lần in
  */
+const sockets = require('../sockets');
+/**
+ * ✅ PATCH /orders/:id/print-temp-bill
+ */
 exports.printTempBill = async (req, res) => {
   try {
-    const orderId = req.params.id;
-    const order = await orderModel.findById(orderId);
+    const { id } = req.params;
+
+    const order = await orderModel. findById(id);
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
     }
-    // Chỉ cho phép in hóa đơn tạm tính khi đã ở trạng thái tạm tính
-    if (order.orderStatus !== 'temp_calculation') {
-      return res.status(400).json({ success: false, message: 'Order chưa ở trạng thái tạm tính' });
-    }
-    order.tempBillPrinted = true;
-    order.tempBillPrintCount = (order.tempBillPrintCount || 0) + 1;
+
     order.orderStatus = 'temp_bill_printed';
     await order.save();
-    // Emit event nếu cần
-    emitOrderEvent(req, 'temp_bill_printed', {
-      orderId: order._id,
-      tableNumber: order.tableNumber,
-      printCount: order.tempBillPrintCount
-    });
+
+    // ✅✅✅ THÊM: Emit temp_bill_printed
+    try {
+      sockets.emitTempBillPrinted({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        printedAt: new Date()
+      });
+      console.log(`✅ Emitted temp_bill_printed for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit temp_bill_printed:', emitError);
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'Đã cập nhật trạng thái in hóa đơn tạm tính',
-      printCount: order.tempBillPrintCount
+      message: 'Đã in hóa đơn tạm tính',
+      data: order
     });
   } catch (error) {
     console.error('printTempBill error:', error);
@@ -39,7 +49,7 @@ exports.printTempBill = async (req, res) => {
 };
 // controllers/order.controller.js
 const { orderModel } = require('../model/order.model');
-const { emitOrderEvent } = require('../sockets');
+
 const { menuModel } = require('../model/menu.model'); 
 const { tableModel } = require('../model/table.model');
 const { Revenue } = require('../model/revenue.model');
@@ -188,6 +198,9 @@ exports. getOrderById = async (req, res) => {
 /**
  * POST /orders
  */
+/**
+ * ✅ POST /orders - Tạo order mới
+ */
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -208,15 +221,15 @@ exports.createOrder = async (req, res) => {
       server,
       cashier,
       items: enrichedItems,
-      totalAmount:  total,
+      totalAmount: total,
       discount:  discount || 0,
-      finalAmount: final,
+      finalAmount:  final,
       paymentMethod,
       orderStatus:  orderStatus || 'pending'
     });
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('createOrder: enrichedItems preview:', enrichedItems.slice(0, 10));
+      console.log('createOrder:  enrichedItems preview:', enrichedItems.slice(0, 10));
     }
 
     const saved = await newOrder.save();
@@ -225,7 +238,26 @@ exports.createOrder = async (req, res) => {
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
 
-    emitOrderEvent(req, 'order_created', populated || saved);
+    // ✅✅✅ THÊM:  Emit order_created event
+    try {
+      console.log('[SOCKET] Emitting orderCreated:', {
+        tableNumber: saved.tableNumber,
+        orderId: saved._id
+      });
+      sockets.emitOrderCreated({
+        _id: saved._id,
+        tableNumber:  saved.tableNumber,
+        items: enrichedItems,
+        totalAmount: total,
+        finalAmount: final,
+        orderStatus: saved.orderStatus,
+        createdAt: saved.createdAt
+      });
+      console.log(`✅ Emitted order_created for table ${saved.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_created:', emitError);
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Tạo order thành công',
@@ -240,20 +272,23 @@ exports.createOrder = async (req, res) => {
     });
   }
 };
-
+/**
+ * ✅ PUT/PATCH /orders/:id hoặc /orders/:orderId
+ * ✅ ĐÃ SỬA:  Hỗ trợ TẤT CẢ các field check items
+ */
 /**
  * ✅ PUT/PATCH /orders/:id hoặc /orders/:orderId
  * ✅ ĐÃ SỬA:  Hỗ trợ TẤT CẢ các field check items
  */
 exports.updateOrder = async (req, res) => {
   try {
-    const orderId = req.params.id || req. params.orderId;
+    const orderId = req.params.id || req.params.orderId;
     
     console.log('========================================');
-    // ...
+    console.log('updateOrder called');
+    console.log('orderId:', orderId);
+    console.log('body:', req.body);
     console.log('========================================');
-    // ...
-    // ...
     
     const {
       tableNumber, items, totalAmount, discount,
@@ -262,99 +297,95 @@ exports.updateOrder = async (req, res) => {
       // ✅ Check items fields
       checkItemsRequestedAt, 
       checkItemsRequestedBy,
-      checkItemsStatus,           // ✅ THÊM MỚI
-      checkItemsCompletedBy,      // ✅ THÊM MỚI
-      checkItemsCompletedAt,      // ✅ THÊM MỚI
-      checkItemsNote              // ✅ THÊM MỚI
+      checkItemsStatus,
+      checkItemsCompletedBy,
+      checkItemsCompletedAt,
+      checkItemsNote,
+      checkItemsAcknowledgedAt,
+      checkItemsAcknowledgedBy,
+      // Temp calculation fields
+      tempCalculationRequestedAt,
+      tempCalculationRequestedBy
     } = req.body;
 
-    let enrichedItems = undefined;
-    if (Array.isArray(items)) {
-      enrichedItems = await enrichItemsWithMenuData(items);
+    const updates = {};
+
+    // Basic fields
+    if (tableNumber !== undefined) updates.tableNumber = tableNumber;
+    if (items !== undefined) updates.items = items;
+    if (totalAmount !== undefined) updates.totalAmount = totalAmount;
+    if (discount !== undefined) updates.discount = discount;
+    if (finalAmount !== undefined) updates.finalAmount = finalAmount;
+    if (paidAmount !== undefined) updates.paidAmount = paidAmount;
+    if (change !== undefined) updates.change = change;
+    if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
+    if (orderStatus !== undefined) updates.orderStatus = orderStatus;
+    if (paidAt !== undefined) updates.paidAt = paidAt;
+
+    // ✅ Check items fields
+    if (checkItemsRequestedAt !== undefined) updates.checkItemsRequestedAt = checkItemsRequestedAt;
+    if (checkItemsRequestedBy !== undefined) updates.checkItemsRequestedBy = checkItemsRequestedBy;
+    if (checkItemsStatus !== undefined) updates.checkItemsStatus = checkItemsStatus;
+    if (checkItemsCompletedBy !== undefined) updates.checkItemsCompletedBy = checkItemsCompletedBy;
+    if (checkItemsCompletedAt !== undefined) updates.checkItemsCompletedAt = checkItemsCompletedAt;
+    if (checkItemsNote !== undefined) updates.checkItemsNote = checkItemsNote;
+    if (checkItemsAcknowledgedAt !== undefined) updates.checkItemsAcknowledgedAt = checkItemsAcknowledgedAt;
+    if (checkItemsAcknowledgedBy !== undefined) updates.checkItemsAcknowledgedBy = checkItemsAcknowledgedBy;
+
+    // Temp calculation fields
+    if (tempCalculationRequestedAt !== undefined) updates.tempCalculationRequestedAt = tempCalculationRequestedAt;
+    if (tempCalculationRequestedBy !== undefined) updates.tempCalculationRequestedBy = tempCalculationRequestedBy;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không có field nào để cập nhật'
+      });
     }
 
-    const updateData = {};
-    
-    // Chỉ thêm vào updateData nếu field có trong request
-    if (tableNumber !== undefined) updateData.tableNumber = tableNumber;
-    if (enrichedItems !== undefined) updateData.items = enrichedItems;
-    else if (items !== undefined) updateData.items = items;
-    if (totalAmount !== undefined) updateData.totalAmount = totalAmount;
-    if (discount !== undefined) updateData.discount = discount;
-    if (finalAmount !== undefined) updateData.finalAmount = finalAmount;
-    if (paidAmount !== undefined) updateData.paidAmount = paidAmount;
-    if (change !== undefined) updateData.change = change;
-    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
-    if (orderStatus !== undefined) updateData.orderStatus = orderStatus;
-
-    if (orderStatus === 'paid' && paidAt) {
-      updateData.paidAt = paidAt;
-    }
-
-    // ✅ XỬ LÝ TẤT CẢ CÁC FIELD CHECK ITEMS
-    if (checkItemsRequestedAt !== undefined) {
-      updateData.checkItemsRequestedAt = checkItemsRequestedAt;
-      console.log('✅ Updating checkItemsRequestedAt to:', checkItemsRequestedAt);
-    }
-    if (checkItemsRequestedBy !== undefined) {
-      updateData.checkItemsRequestedBy = checkItemsRequestedBy;
-      console.log('✅ Updating checkItemsRequestedBy to:', checkItemsRequestedBy);
-    }
-    if (checkItemsStatus !== undefined) {
-      updateData.checkItemsStatus = checkItemsStatus;
-      // ...
-    }
-    if (checkItemsCompletedBy !== undefined) {
-      updateData. checkItemsCompletedBy = checkItemsCompletedBy;
-      // ...
-    }
-    if (checkItemsCompletedAt !== undefined) {
-      // Chuyển đổi về kiểu Date nếu là string
-      if (typeof checkItemsCompletedAt === 'string') {
-        updateData.checkItemsCompletedAt = new Date(checkItemsCompletedAt.replace(/\s+/g, ''));
-      } else {
-        updateData.checkItemsCompletedAt = checkItemsCompletedAt;
-      }
-      // ...
-    }
-    if (checkItemsNote !== undefined) {
-      updateData.checkItemsNote = checkItemsNote;
-      // ...
-    }
-
-    // ...
+    console.log('Updates to apply:', updates);
 
     const updated = await orderModel.findByIdAndUpdate(
       orderId,
-      updateData,
+      { $set: updates },
       { new: true, runValidators: true }
-    ).exec();
+    );
 
     if (!updated) {
-      console.log('❌ Order not found:', orderId);
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res. status(404).json({
+        success: false,
+        message:  'Không tìm thấy order'
+      });
     }
-
-    // ...
-    // ...
-    // ...
-    console.log('========================================');
 
     let query = orderModel.findById(updated._id);
     query = populateOrderQuery(query);
     const populated = await query.lean().exec();
 
-    emitOrderEvent(req, 'order_updated', populated || updated);
-    
+    // ✅✅✅ THÊM: Emit order_updated event
+    try {
+      console.log('[SOCKET] Emitting orderUpdated:', {
+        orderId: updated._id,
+        tableNumber: updated.tableNumber
+      });
+      sockets.emitOrderUpdated({
+        _id: updated._id,
+        tableNumber: updated.tableNumber,
+        orderStatus: updated.orderStatus,
+        ... updates
+      });
+      console.log(`✅ Emitted order_updated for order ${updated._id}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_updated:', emitError);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Cập nhật order thành công',
       data: populated || updated
     });
   } catch (error) {
-    console.error('========================================');
-    console.error('❌ updateOrder error:', error);
-    console.error('========================================');
+    console.error('updateOrder error:', error);
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi cập nhật order',
@@ -366,13 +397,34 @@ exports.updateOrder = async (req, res) => {
 /**
  * DELETE /orders/:id
  */
-exports. deleteOrder = async (req, res) => {
+
+exports.deleteOrder = async (req, res) => {
   try {
-    const deleted = await orderModel.softDelete(req.params.id).exec();
+    const deleted = await orderModel.findByIdAndDelete(req.params.id);
+
     if (!deleted) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
     }
-    return res.status(200).json({ success: true, message: 'Xóa order thành công', data: deleted });
+
+    // ✅✅✅ THÊM: Emit order_deleted
+    try {
+      sockets. emitOrderDeleted({
+        _id: deleted._id,
+        tableNumber: deleted.tableNumber
+      });
+      console.log(`✅ Emitted order_deleted for order ${deleted._id}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit order_deleted:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Xóa order thành công',
+      data:  deleted
+    });
   } catch (error) {
     console.error('deleteOrder error:', error);
     return res.status(500).json({
@@ -382,7 +434,6 @@ exports. deleteOrder = async (req, res) => {
     });
   }
 };
-
 // ========================================
 // PAYMENT ENDPOINTS
 // ========================================
@@ -483,19 +534,21 @@ exports.payOrder = async (req, res) => {
     }
     await dailyReport. save();
 
-    // Emit realtime cho TẤT CẢ bàn
-    const io = req.app?. get('io');
-    if (io) {
-      io.emit('order_paid', { 
-        orderId:  order._id,
-        tableNumbers: tableNumbersToReset
+    // Emit realtime cho TẤT CẢ bàn - CHUẨN HÓA QUA sockets.js
+    console.log('[SOCKET] Emitting orderPaid:', {
+      orderId: order._id,
+      tableNumber: order.tableNumber
+    });
+    sockets.emitOrderPaid({ 
+      orderId:  order._id,
+      tableNumbers: tableNumbersToReset
+    });
+    for (const table of resetTables) {
+      console.log('[SOCKET] Emitting tableUpdated:', {
+        tableNumber: table.tableNumber,
+        status: table.status
       });
-
-      for (const table of resetTables) {
-        io.to(`table_${table.tableNumber}`).emit('order_paid', { tableNumber: table.tableNumber });
-        io.emit('table_updated', table);
-        io.to(`table_${table.tableNumber}`).emit('table_updated', table);
-      }
+      sockets.emitTableUpdated(table);
     }
 
     return res.status(200).json({
@@ -647,62 +700,53 @@ exports.getRevenueFromOrders = async (req, res) => {
 /**
  * POST /orders/: id/request-temp-calculation
  */
+/**
+ * ✅ POST /orders/:id/request-temp-calculation
+ */
 exports.requestTempCalculation = async (req, res) => {
   try {
+    const { id } = req.params;
     const { requestedBy } = req.body;
-    const orderId = req.params.id;
 
-    const order = await orderModel.findById(orderId);
+    const order = await orderModel.findById(id);
     if (!order) {
-      return res. status(404).json({ success: false, message: 'Không tìm thấy order' });
-    }
-
-    if (order.orderStatus === 'paid') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Order đã thanh toán, không thể yêu cầu tạm tính' 
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
       });
     }
 
-    if (order.orderStatus === 'cancelled') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Order đã bị hủy, không thể yêu cầu tạm tính' 
-      });
-    }
-
-    order.orderStatus = 'temp_calculation';
-    order.tempCalculationRequestedBy = requestedBy || null;
     order.tempCalculationRequestedAt = new Date();
+    order.tempCalculationRequestedBy = requestedBy || null;
     await order.save();
 
-    let query = orderModel.findById(order._id);
-    query = populateOrderQuery(query);
-    query = query.populate('tempCalculationRequestedBy', 'name username');
-    const populated = await query.lean().exec();
+    // ✅✅✅ THÊM: Emit temp_calculation_request
+    try {
+      sockets.emitTempCalculationRequest({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        requestedAt: order.tempCalculationRequestedAt,
+        requestedBy:  requestedBy
+      });
+      console.log(`✅ Emitted temp_calculation_request for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit temp_calculation_request:', emitError);
+    }
 
-    emitOrderEvent(req, 'temp_calculation_requested', {
-      orderId: order._id,
-      tableNumber: order.tableNumber,
-      order: populated,
-      requestedBy: requestedBy,
-      requestedAt: order.tempCalculationRequestedAt
-    });
     return res.status(200).json({
       success: true,
-      message: 'Đã chuyển sang trạng thái hóa đơn tạm tính và gửi thông báo cho thu ngân',
-      data: populated
+      message: 'Đã gửi yêu cầu tạm tính',
+      data: order
     });
   } catch (error) {
     console.error('requestTempCalculation error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Lỗi khi yêu cầu tạm tính',
-      error: error.message
+      message: 'Lỗi khi tạo yêu cầu tạm tính',
+      error:  error.message
     });
   }
 };
-
 /**
  * GET /orders/check-items-requests/count
  * Đếm số lượng yêu cầu kiểm tra bàn (orders có checkItemsRequestedAt không null)
@@ -761,69 +805,108 @@ exports.getCheckItemsRequests = async (req, res) => {
  * PATCH /orders/:orderId/request-check-items
  * Thu ngân gửi yêu cầu kiểm tra bàn
  */
+/**
+ * ✅ POST /orders/:orderId/request-check-items
+ */
 exports.requestCheckItems = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { userId } = req.body;
+    const { requestedBy } = req.body;
+
     const order = await orderModel.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: 'Order không tồn tại' });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
+    }
 
-    order.checkItemsStatus = 'pending';
-    order.checkItemsRequestedBy = userId;
     order.checkItemsRequestedAt = new Date();
-    // reset các trường completed/acknowledged
-    order.checkItemsCompletedBy = null;
-    order.checkItemsCompletedAt = null;
-    order.checkItemsNote = '';
-
+    order.checkItemsRequestedBy = requestedBy || null;
+    order.checkItemsStatus = 'pending';
     await order.save();
-    emitOrderEvent(req, 'order_check_items_requested', {
-      orderId: order._id,
-      tableNumber: order.tableNumber,
-      checkItemsStatus: order.checkItemsStatus,
-      checkItemsRequestedBy: order.checkItemsRequestedBy,
-      checkItemsRequestedAt: order. checkItemsRequestedAt
+
+    // ✅✅✅ THÊM: Emit check_items_request
+    try {
+      sockets. emitCheckItemsRequest({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        requestedAt: order.checkItemsRequestedAt,
+        requestedBy:  requestedBy
+      });
+      console.log(`✅ Emitted check_items_request for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit check_items_request:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã gửi yêu cầu kiểm tra bàn',
+      data: order
     });
-    return res.status(200).json({ success: true, message: 'Đã gửi yêu cầu kiểm tra bàn', data: order });
   } catch (error) {
     console.error('requestCheckItems error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi gửi yêu cầu kiểm tra bàn', error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi tạo yêu cầu kiểm tra',
+      error: error.message
+    });
   }
 };
-
 /**
  * PATCH /orders/:orderId/complete-check-items
  * Phục vụ xác nhận đã kiểm tra bàn
  */
+/**
+ * ✅ PATCH /orders/:orderId/complete-check-items
+ */
 exports.completeCheckItems = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { userId, checkItemsNote } = req. body;
+    const { completedBy, note } = req.body;
+
     const order = await orderModel.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: 'Order không tồn tại' });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy order'
+      });
+    }
 
     order.checkItemsStatus = 'completed';
-    order.checkItemsCompletedBy = userId;
-    order. checkItemsCompletedAt = new Date();
-    order.checkItemsNote = checkItemsNote || '';
-    // giữ nguyên checkItemsRequestedBy/At
-
+    order.checkItemsCompletedBy = completedBy || null;
+    order.checkItemsCompletedAt = new Date();
+    order.checkItemsNote = note || '';
     await order.save();
-    emitOrderEvent(req, 'order_check_items_completed', {
-      orderId: order._id,
-      tableNumber: order.tableNumber,
-      checkItemsStatus: order.checkItemsStatus,
-      checkItemsCompletedBy: order.checkItemsCompletedBy,
-      checkItemsCompletedAt: order.checkItemsCompletedAt,
-      checkItemsNote: order.checkItemsNote
+
+    // ✅✅✅ THÊM: Emit check_items_completed
+    try {
+      sockets.emitCheckItemsCompleted({
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        completedBy: completedBy,
+        completedAt: order.checkItemsCompletedAt,
+        note: note
+      });
+      console.log(`✅ Emitted check_items_completed for table ${order.tableNumber}`);
+    } catch (emitError) {
+      console.warn('⚠️ Failed to emit check_items_completed:', emitError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Đã hoàn thành kiểm tra bàn',
+      data: order
     });
-    return res.status(200).json({ success: true, message: 'Đã xác nhận kiểm tra bàn', data: order });
   } catch (error) {
     console.error('completeCheckItems error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi xác nhận kiểm tra bàn', error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi khi hoàn thành kiểm tra',
+      error: error.message
+    });
   }
 };
-
 /**
  * PATCH /orders/:orderId/acknowledge-check-items
  * Thu ngân xác nhận đã nhận kết quả kiểm tra
@@ -838,7 +921,7 @@ exports.acknowledgeCheckItems = async (req, res) => {
     // giữ lại checkItemsRequestedBy/At để lưu vết
 
     await order.save();
-    emitOrderEvent(req, 'order_check_items_acknowledged', {
+    sockets.emit('order_check_items_acknowledged', {
       orderId: order._id,
       tableNumber: order.tableNumber,
       checkItemsStatus: order.checkItemsStatus
@@ -867,11 +950,11 @@ exports.checkOrderItems = async (req, res) => {
 
     await order.save();
 
-    // Phát socket event cho thu ngân
-    emitOrderEvent(req, 'order_items_checked', {
+    // Phát socket event cho thu ngân (đồng nhất qua sockets.js)
+    sockets.emit('order_items_checked', {
       orderId: order._id,
       tableNumber: order.tableNumber,
-      checkItemsStatus: order. checkItemsStatus,
+      checkItemsStatus: order.checkItemsStatus,
       checkItemsCompletedAt: order.checkItemsCompletedAt,
       checkItemsNote: order.checkItemsNote
     });
