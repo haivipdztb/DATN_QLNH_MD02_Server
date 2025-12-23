@@ -264,15 +264,16 @@ exports.getServiceDashboard = async (req, res) => {
             orderStatus: { $in: ['pending', 'confirmed'] }
         });
 
-        // Hóa đơn đã thanh toán hôm nay
+        // Hóa đơn đã thanh toán hôm nay - Lấy từ History model
+        const { History } = require('../model/history.model');
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const paidTodayCount = await orderModel.countDocuments({
-            orderStatus: 'paid',
-            paidAt: { $gte: today, $lt: tomorrow }
+        const paidTodayCount = await History.countDocuments({
+            action: 'pay',
+            createdAt: { $gte: today, $lt: tomorrow }
         });
 
         // Số món đang nấu
