@@ -1,5 +1,6 @@
 const { reportModel } = require('../model/report.model');
 const { orderModel } = require('../model/order.model');
+const { History } = require('../model/history.model');
 
 // Xem danh sách tất cả báo cáo
 exports.getAllReports = async (req, res) => {
@@ -42,6 +43,7 @@ exports.getReportById = async (req, res) => {
 };
 
 // Tạo báo cáo theo ngày
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.createDailyReport = async (req, res) => {
     try {
         const { date, reportDate } = req.body; // Nhận cả 2
@@ -68,15 +70,19 @@ exports.createDailyReport = async (req, res) => {
             });
         }
 
-        // Lấy tất cả orders trong ngày
-        const orders = await orderModel.find({
-            createdAt: { $gte: startDate, $lte: endDate },
-            orderStatus: 'paid'
-        });
+        // Lấy tất cả history với action='pay' trong ngày
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: startDate, $lte: endDate }
+        }).lean();
 
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalDiscountGiven = orders.reduce((sum, order) => sum + order.discount, 0);
+        const totalOrders = paymentHistories.length;
+        const totalRevenue = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalDiscountGiven = paymentHistories.reduce((sum, h) => {
+            const total = h.details?.totalAmount || 0;
+            const final = h.details?.finalAmount || 0;
+            return sum + (total - final);
+        }, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         const newReport = new reportModel({
@@ -88,7 +94,7 @@ exports.createDailyReport = async (req, res) => {
             totalDiscountGiven,
             averageOrderValue,
             details: {
-                orders: orders.map(o => o._id)
+                historyIds: paymentHistories.map(h => h._id)
             }
         });
 
@@ -108,6 +114,7 @@ exports.createDailyReport = async (req, res) => {
 };
 
 // Tạo báo cáo theo tuần
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.createWeeklyReport = async (req, res) => {
     try {
         const { startDate, endDate } = req.body;
@@ -116,14 +123,19 @@ exports.createWeeklyReport = async (req, res) => {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            createdAt: { $gte: start, $lte: end },
-            orderStatus: 'paid'
-        });
+        // Lấy tất cả history với action='pay' trong khoảng thời gian
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: start, $lte: end }
+        }).lean();
 
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalDiscountGiven = orders.reduce((sum, order) => sum + order.discount, 0);
+        const totalOrders = paymentHistories.length;
+        const totalRevenue = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalDiscountGiven = paymentHistories.reduce((sum, h) => {
+            const total = h.details?.totalAmount || 0;
+            const final = h.details?.finalAmount || 0;
+            return sum + (total - final);
+        }, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         const newReport = new reportModel({
@@ -137,7 +149,7 @@ exports.createWeeklyReport = async (req, res) => {
             details: {
                 startDate: start,
                 endDate: end,
-                orders: orders.map(o => o._id)
+                historyIds: paymentHistories.map(h => h._id)
             }
         });
 
@@ -213,9 +225,9 @@ exports.getReportsByDate = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         if (!startDate || !endDate) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Cần cung cấp startDate và endDate" 
+            return res.status(400).json({
+                success: false,
+                message: "Cần cung cấp startDate và endDate"
             });
         }
         const start = new Date(startDate);
@@ -243,6 +255,7 @@ exports.getReportsByDate = async (req, res) => {
 
 
 // Tạo báo cáo theo tháng
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.createMonthlyReport = async (req, res) => {
     try {
         const { month, year } = req.body;
@@ -258,14 +271,19 @@ exports.createMonthlyReport = async (req, res) => {
         const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
         const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            createdAt: { $gte: startDate, $lte: endDate },
-            orderStatus: 'paid'
-        });
+        // Lấy tất cả history với action='pay' trong tháng
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: startDate, $lte: endDate }
+        }).lean();
 
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalDiscountGiven = orders.reduce((sum, order) => sum + order.discount, 0);
+        const totalOrders = paymentHistories.length;
+        const totalRevenue = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalDiscountGiven = paymentHistories.reduce((sum, h) => {
+            const total = h.details?.totalAmount || 0;
+            const final = h.details?.finalAmount || 0;
+            return sum + (total - final);
+        }, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         const newReport = new reportModel({
@@ -281,7 +299,7 @@ exports.createMonthlyReport = async (req, res) => {
                 year,
                 startDate,
                 endDate,
-                orders: orders.map(o => o._id)
+                historyIds: paymentHistories.map(h => h._id)
             }
         });
 
@@ -301,6 +319,7 @@ exports.createMonthlyReport = async (req, res) => {
 };
 
 // Thống kê doanh thu theo giờ
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.getRevenueByHour = async (req, res) => {
     try {
         const { date } = req.query;
@@ -317,10 +336,10 @@ exports.getRevenueByHour = async (req, res) => {
         const endDate = new Date(date);
         endDate.setHours(23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            createdAt: { $gte: startDate, $lte: endDate },
-            orderStatus: 'paid'
-        });
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: startDate, $lte: endDate }
+        }).lean();
 
         // Nhóm theo giờ
         const hourlyStats = {};
@@ -333,11 +352,17 @@ exports.getRevenueByHour = async (req, res) => {
             };
         }
 
-        orders.forEach(order => {
-            const hour = new Date(order.createdAt).getHours();
-            hourlyStats[hour].revenue += order.finalAmount;
+        paymentHistories.forEach(history => {
+            const details = history.details || {};
+            const paidAt = details.paidAt ? new Date(details.paidAt) : new Date(history.createdAt);
+            const hour = paidAt.getHours();
+            const finalAmount = details.finalAmount || 0;
+            const totalAmount = details.totalAmount || 0;
+            const discount = totalAmount - finalAmount;
+
+            hourlyStats[hour].revenue += finalAmount;
             hourlyStats[hour].orders += 1;
-            hourlyStats[hour].discount += order.discount || 0;
+            hourlyStats[hour].discount += discount;
         });
 
         const result = Object.values(hourlyStats);
@@ -357,6 +382,7 @@ exports.getRevenueByHour = async (req, res) => {
 };
 
 // Lấy giờ cao điểm
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.getPeakHours = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -373,10 +399,11 @@ exports.getPeakHours = async (req, res) => {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            createdAt: { $gte: start, $lte: end },
-            orderStatus: 'paid'
-        });
+        // Lấy tất cả history với action='pay' trong khoảng thời gian
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: start, $lte: end }
+        }).lean();
 
         // Nhóm theo giờ
         const hourlyStats = {};
@@ -388,9 +415,13 @@ exports.getPeakHours = async (req, res) => {
             };
         }
 
-        orders.forEach(order => {
-            const hour = new Date(order.createdAt).getHours();
-            hourlyStats[hour].revenue += order.finalAmount;
+        paymentHistories.forEach(history => {
+            const details = history.details || {};
+            const paidAt = details.paidAt ? new Date(details.paidAt) : new Date(history.createdAt);
+            const hour = paidAt.getHours();
+            const finalAmount = details.finalAmount || 0;
+
+            hourlyStats[hour].revenue += finalAmount;
             hourlyStats[hour].orders += 1;
         });
 
@@ -423,6 +454,7 @@ exports.getPeakHours = async (req, res) => {
 };
 
 // Thống kê doanh thu theo khoảng thời gian tùy chỉnh
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.getRevenueByDateRange = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -439,20 +471,31 @@ exports.getRevenueByDateRange = async (req, res) => {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            createdAt: { $gte: start, $lte: end },
-            orderStatus: 'paid'
-        });
+        // Lấy tất cả history với action='pay' trong khoảng thời gian
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: start, $lte: end }
+        }).lean();
 
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalDiscountGiven = orders.reduce((sum, order) => sum + order.discount, 0);
+        const totalOrders = paymentHistories.length;
+        const totalRevenue = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalDiscountGiven = paymentHistories.reduce((sum, h) => {
+            const total = h.details?.totalAmount || 0;
+            const final = h.details?.finalAmount || 0;
+            return sum + (total - final);
+        }, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         // Nhóm theo ngày
         const dailyStats = {};
-        orders.forEach(order => {
-            const dateKey = new Date(order.createdAt).toISOString().split('T')[0];
+        paymentHistories.forEach(history => {
+            const details = history.details || {};
+            const paidAt = details.paidAt ? new Date(details.paidAt) : new Date(history.createdAt);
+            const dateKey = paidAt.toISOString().split('T')[0];
+            const finalAmount = details.finalAmount || 0;
+            const totalAmount = details.totalAmount || 0;
+            const discount = totalAmount - finalAmount;
+
             if (!dailyStats[dateKey]) {
                 dailyStats[dateKey] = {
                     date: dateKey,
@@ -461,9 +504,9 @@ exports.getRevenueByDateRange = async (req, res) => {
                     discount: 0
                 };
             }
-            dailyStats[dateKey].revenue += order.finalAmount;
+            dailyStats[dateKey].revenue += finalAmount;
             dailyStats[dateKey].orders += 1;
-            dailyStats[dateKey].discount += order.discount || 0;
+            dailyStats[dateKey].discount += discount;
         });
 
         res.status(200).json({
@@ -475,7 +518,9 @@ exports.getRevenueByDateRange = async (req, res) => {
                     totalDiscountGiven,
                     averageOrderValue
                 },
-                dailyBreakdown: Object.values(dailyStats)
+                dailyBreakdown: Object.values(dailyStats).sort((a, b) =>
+                    new Date(a.date) - new Date(b.date)
+                )
             },
             period: {
                 startDate: start,
@@ -492,6 +537,7 @@ exports.getRevenueByDateRange = async (req, res) => {
 };
 
 // Lấy báo cáo chi tiết với biểu đồ và thống kê đầy đủ
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.getDetailedReport = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -508,16 +554,20 @@ exports.getDetailedReport = async (req, res) => {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
 
-        // Lấy tất cả orders trong khoảng thời gian
-        const orders = await orderModel.find({
-            createdAt: { $gte: start, $lte: end },
-            orderStatus: 'paid'
-        }).populate('items.menuItem');
+        // Lấy tất cả history với action='pay' trong khoảng thời gian
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: { $gte: start, $lte: end }
+        }).lean();
 
         // Tính toán các metrics cơ bản
-        const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalDiscountGiven = orders.reduce((sum, order) => sum + (order.discount || 0), 0);
+        const totalOrders = paymentHistories.length;
+        const totalRevenue = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalDiscountGiven = paymentHistories.reduce((sum, h) => {
+            const total = h.details?.totalAmount || 0;
+            const final = h.details?.finalAmount || 0;
+            return sum + (total - final);
+        }, 0);
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         // Nhóm theo ngày để vẽ biểu đồ
@@ -535,9 +585,15 @@ exports.getDetailedReport = async (req, res) => {
             };
         }
 
-        orders.forEach(order => {
+        paymentHistories.forEach(history => {
+            const details = history.details || {};
+            const paidAt = details.paidAt ? new Date(details.paidAt) : new Date(history.createdAt);
+            const finalAmount = details.finalAmount || 0;
+            const totalAmount = details.totalAmount || 0;
+            const discount = totalAmount - finalAmount;
+
             // Daily stats
-            const dateKey = new Date(order.createdAt).toISOString().split('T')[0];
+            const dateKey = paidAt.toISOString().split('T')[0];
             if (!dailyStats[dateKey]) {
                 dailyStats[dateKey] = {
                     date: dateKey,
@@ -546,17 +602,17 @@ exports.getDetailedReport = async (req, res) => {
                     discount: 0
                 };
             }
-            dailyStats[dateKey].revenue += order.finalAmount;
+            dailyStats[dateKey].revenue += finalAmount;
             dailyStats[dateKey].orders += 1;
-            dailyStats[dateKey].discount += order.discount || 0;
+            dailyStats[dateKey].discount += discount;
 
             // Hourly stats
-            const hour = new Date(order.createdAt).getHours();
-            hourlyStats[hour].revenue += order.finalAmount;
+            const hour = paidAt.getHours();
+            hourlyStats[hour].revenue += finalAmount;
             hourlyStats[hour].orders += 1;
 
             // Payment method stats
-            const paymentMethod = order.paymentMethod || 'cash';
+            const paymentMethod = details.paymentMethod || 'Tiền mặt';
             if (!paymentMethodStats[paymentMethod]) {
                 paymentMethodStats[paymentMethod] = {
                     method: paymentMethod,
@@ -565,13 +621,13 @@ exports.getDetailedReport = async (req, res) => {
                 };
             }
             paymentMethodStats[paymentMethod].count += 1;
-            paymentMethodStats[paymentMethod].revenue += order.finalAmount;
+            paymentMethodStats[paymentMethod].revenue += finalAmount;
 
             // Dish stats
-            if (order.items && Array.isArray(order.items)) {
-                order.items.forEach(item => {
-                    const dishName = item.menuItem?.name || item.name || 'Unknown';
-                    const dishId = item.menuItem?._id || item.menuItemId || dishName;
+            if (details.items && Array.isArray(details.items)) {
+                details.items.forEach(item => {
+                    const dishName = item.menuItemName || item.name || 'Unknown';
+                    const dishId = item.menuItem || dishName;
 
                     if (!dishStats[dishId]) {
                         dishStats[dishId] = {

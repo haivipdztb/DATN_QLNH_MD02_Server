@@ -47,47 +47,63 @@ GET {{baseUrl}}/api/orders/top-selling?startDate=2025-12-01&endDate=2025-12-22&l
 Content-Type: application/json
 
 ### ============================================
-### REPORT APIs
+### REPORT APIs (Sử dụng History Model)
+### Tất cả các API doanh thu đã được cập nhật
+### để lấy dữ liệu từ History thay vì Order
 ### ============================================
 
-### 10. Generate Daily Report
-POST {{baseUrl}}/api/reports/generate
+### 10. Tạo báo cáo theo ngày (History Model)
+POST {{baseUrl}}/api/reports/daily
 Content-Type: application/json
 
 {
-  "reportType": "daily",
-  "date": "2025-12-15",
-  "timeFrame": "daily"
+  "date": "2025-12-23"
 }
 
-### 11. Generate Weekly Report
-POST {{baseUrl}}/api/reports/generate
+### 11. Tạo báo cáo theo tuần (History Model)
+POST {{baseUrl}}/api/reports/weekly
 Content-Type: application/json
 
 {
-  "reportType": "weekly",
-  "startDate": "2025-12-01",
-  "endDate": "2025-12-07",
-  "timeFrame": "weekly"
+  "startDate": "2025-12-16",
+  "endDate": "2025-12-23"
 }
 
-### 12. Generate Monthly Report
-POST {{baseUrl}}/api/reports/generate
+### 12. Tạo báo cáo theo tháng (History Model)
+POST {{baseUrl}}/api/reports/monthly
 Content-Type: application/json
 
 {
-  "reportType": "monthly",
-  "startDate": "2025-12-01",
-  "endDate": "2025-12-31",
-  "timeFrame": "monthly"
+  "month": 12,
+  "year": 2025
 }
 
-### 13. Get All Reports
+### 13. Lấy danh sách tất cả báo cáo
 GET {{baseUrl}}/api/reports
 Content-Type: application/json
 
-### 14. Get Report by ID
+### 14. Lấy báo cáo theo ID
 GET {{baseUrl}}/api/reports/676889e4a5e1234567890abc
+Content-Type: application/json
+
+### 15. Lấy báo cáo chi tiết với biểu đồ (History Model)
+GET {{baseUrl}}/api/reports/detailed?startDate=2025-12-01&endDate=2025-12-23
+Content-Type: application/json
+
+### 16. Thống kê doanh thu theo giờ (History Model)
+GET {{baseUrl}}/api/reports/hourly?date=2025-12-23
+Content-Type: application/json
+
+### 17. Thống kê doanh thu theo khoảng thời gian (History Model)
+GET {{baseUrl}}/api/reports/date-range?startDate=2025-12-01&endDate=2025-12-23
+Content-Type: application/json
+
+### 18. Lấy giờ cao điểm (History Model)
+GET {{baseUrl}}/api/reports/peak-hours?startDate=2025-12-01&endDate=2025-12-23
+Content-Type: application/json
+
+### 19. Lấy báo cáo theo khoảng ngày
+GET {{baseUrl}}/api/reports/byDate?startDate=2025-12-01&endDate=2025-12-23
 Content-Type: application/json
 
 ### ============================================
