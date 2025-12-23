@@ -574,7 +574,7 @@ exports.payOrder = async (req, res) => {
       action: 'pay',
       performedBy: cashier || 'unknown',
       details: {
-        items: order.items,
+        items: order.items.filter(item => ['pending', 'preparing', 'ready'].includes(item.status)),
         totalAmount: order.totalAmount,
         finalAmount: order.finalAmount,
         orderStatus: 'paid',
