@@ -32,12 +32,29 @@ exports.getAllTables = async (req, res) => {
 exports.updateTable = async (req, res) => {
     try {
         const { tableNumber, capacity, location, status, currentOrder, reservationName, reservationPhone, reservationAt } = req.body;
+
+        // Kiểm tra tableNumber mới có bị trùng không (trừ chính bàn đang update)
+        if (tableNumber !== undefined) {
+            const existingTable = await tableModel.findOne({
+                tableNumber,
+                isDeleted: { $ne: true },
+                _id: { $ne: req.params.id }
+            });
+
+            if (existingTable) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Bàn số ${tableNumber} đã tồn tại. Vui lòng chọn số bàn khác.`
+                });
+            }
+        }
+
         const updatedTable = await tableModel.findByIdAndUpdate(
             req.params.id,
             { tableNumber, capacity, location, status, currentOrder, reservationName, reservationPhone, reservationAt, updatedAt: new Date() },
             { new: true, runValidators: true }
         );
-        
+
         if (!updatedTable) {
             return res.status(404).json({
                 success: false,
@@ -53,16 +70,16 @@ exports.updateTable = async (req, res) => {
                 status: updatedTable.status,
                 updatedAt: updatedTable.updatedAt
             });
-            console.log(`✅ Emitted table_updated for table ${updatedTable. tableNumber}`);
+            console.log(`✅ Emitted table_updated for table ${updatedTable.tableNumber}`);
         } catch (emitError) {
             console.warn('⚠️ Failed to emit table_updated:', emitError);
         }
 
         // If updated to reserved, schedule auto-release after 20s
-        if (updatedTable. status === 'reserved') {
+        if (updatedTable.status === 'reserved') {
             // ✅ Emit table_reserved
             try {
-                sockets. emitTableReserved({
+                sockets.emitTableReserved({
                     _id: updatedTable._id,
                     tableNumber: updatedTable.tableNumber,
                     status: 'reserved',
@@ -91,7 +108,7 @@ exports.updateTable = async (req, res) => {
                                 _id: latest._id,
                                 tableNumber: latest.tableNumber,
                                 status: 'available',
-                                updatedAt:  latest.updatedAt,
+                                updatedAt: latest.updatedAt,
                                 eventName: 'table_auto_released'
                             });
                             console.log(`✅ Emitted table_auto_released for table ${latest.tableNumber}`);
@@ -103,7 +120,7 @@ exports.updateTable = async (req, res) => {
                         try {
                             sockets.emitTableUpdated({
                                 _id: latest._id,
-                                tableNumber:  latest.tableNumber,
+                                tableNumber: latest.tableNumber,
                                 status: 'available',
                                 updatedAt: latest.updatedAt
                             });
@@ -126,7 +143,7 @@ exports.updateTable = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Lỗi khi cập nhật bàn',
-            error: error. message
+            error: error.message
         });
     }
 };
@@ -362,6 +379,20 @@ exports.getTableById = async (req, res) => {
 exports.createTable = async (req, res) => {
     try {
         const { tableNumber, capacity, location, status } = req.body;
+
+        // Kiểm tra tableNumber đã tồn tại chưa (chỉ với bàn chưa bị xóa)
+        const existingTable = await tableModel.findOne({
+            tableNumber,
+            isDeleted: { $ne: true }
+        });
+
+        if (existingTable) {
+            return res.status(400).json({
+                success: false,
+                message: `Bàn số ${tableNumber} đã tồn tại. Vui lòng chọn số bàn khác.`
+            });
+        }
+
         const newTable = new tableModel({
             tableNumber,
             capacity,
