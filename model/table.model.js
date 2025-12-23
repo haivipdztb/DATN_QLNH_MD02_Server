@@ -4,7 +4,7 @@ const { softDeletePlugin } = require('../utils/softDelete');
 // Định nghĩa schema cho table (bàn ăn)
 const tableSchema = new db.mongoose.Schema(
     {
-        tableNumber: { type: Number, required: true, unique: true }, // Số bàn
+        tableNumber: { type: Number, required: true }, // Số bàn (không dùng unique vì soft delete)
         capacity: { type: Number, required: true }, // Số người có thể ngồi
         status: {
             type: String,

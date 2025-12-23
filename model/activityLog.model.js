@@ -4,13 +4,13 @@ const activityLogSchema = new db.mongoose.Schema({
     userId: { type: db.mongoose.Schema.Types.ObjectId, ref: 'userModel', required: false },
     userName: { type: String, required: false },
     userRole: { type: String, required: false },
-    action: { 
-        type: String, 
+    action: {
+        type: String,
         required: true,
         enum: ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'VIEW', 'EXPORT', 'IMPORT', 'PAY', 'CANCEL', 'APPROVE', 'REJECT']
     },
-    resource: { 
-        type: String, 
+    resource: {
+        type: String,
         required: true,
         enum: ['USER', 'ORDER', 'MENU', 'INGREDIENT', 'TABLE', 'VOUCHER', 'REPORT', 'SHIFT', 'SALARY', 'RECIPE', 'CUSTOMER']
     },
