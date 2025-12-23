@@ -77,6 +77,8 @@ app.use('/payroll', payrollRouter);
 app.use('/payment', paymentRouter);
 app.use('/restaurant-settings', restaurantSettingsRouter);
 app.use('/service', serviceRouter);
+// Also expose service routes under /api/service for clients using an /api base path
+app.use('/api/service', serviceRouter);
 
 // catch 404 and forward to error handler
 
