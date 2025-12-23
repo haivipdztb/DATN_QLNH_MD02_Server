@@ -10,7 +10,7 @@ exports.printTempBill = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await orderModel. findById(id);
+    const order = await orderModel.findById(id);
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -50,7 +50,7 @@ exports.printTempBill = async (req, res) => {
 // controllers/order.controller.js
 const { orderModel } = require('../model/order.model');
 
-const { menuModel } = require('../model/menu.model'); 
+const { menuModel } = require('../model/menu.model');
 const { tableModel } = require('../model/table.model');
 const { Revenue } = require('../model/revenue.model');
 const { History } = require('../model/history.model');
@@ -64,7 +64,7 @@ async function enrichItemsWithMenuData(rawItems = []) {
 
   for (const it of rawItems) {
     try {
-      if (! it) continue;
+      if (!it) continue;
 
       const menuId = it.menuItem || it.menuItemId || it.menuId || null;
       let menuDoc = null;
@@ -80,10 +80,10 @@ async function enrichItemsWithMenuData(rawItems = []) {
       const quantity = (typeof it.quantity === 'number' && it.quantity > 0) ? it.quantity : 1;
 
       let price = 0;
-      if (typeof it.price === 'number' && ! isNaN(it.price)) {
+      if (typeof it.price === 'number' && !isNaN(it.price)) {
         price = it.price;
       } else if (menuDoc && typeof menuDoc.price === 'number') {
-        price = menuDoc. price;
+        price = menuDoc.price;
       }
 
       let menuItemName = '';
@@ -97,18 +97,18 @@ async function enrichItemsWithMenuData(rawItems = []) {
 
       let imageUrl = '';
       if (it.imageUrl && String(it.imageUrl).trim()) imageUrl = String(it.imageUrl).trim();
-      if (! imageUrl && it.image && String(it.image).trim()) imageUrl = String(it.image).trim();
+      if (!imageUrl && it.image && String(it.image).trim()) imageUrl = String(it.image).trim();
       if (!imageUrl && menuDoc) {
-        imageUrl = menuDoc. image || menuDoc.imageUrl || menuDoc.thumbnail || '';
+        imageUrl = menuDoc.image || menuDoc.imageUrl || menuDoc.thumbnail || '';
       }
 
-      const status = it.status ?  String(it.status) : 'pending';
+      const status = it.status ? String(it.status) : 'pending';
       const note = it.note ? String(it.note) : '';
 
       out.push({
         menuItem: menuId || null,
-        menuItemName:  menuItemName || '',
-        imageUrl:  imageUrl || '',
+        menuItemName: menuItemName || '',
+        imageUrl: imageUrl || '',
         quantity,
         price,
         status,
@@ -172,7 +172,7 @@ exports.getAllOrders = async (req, res) => {
 /**
  * GET /orders/:id
  */
-exports. getOrderById = async (req, res) => {
+exports.getOrderById = async (req, res) => {
   try {
     let query = orderModel.findById(req.params.id);
     query = populateOrderQuery(query);
@@ -180,7 +180,7 @@ exports. getOrderById = async (req, res) => {
     const order = await query.lean().exec();
 
     if (!order) {
-      return res.status(404).json({ success: false, message:  'Không tìm thấy order' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy order' });
     }
 
     return res.status(200).json({ success: true, data: order });
@@ -189,7 +189,7 @@ exports. getOrderById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi lấy chi tiết order',
-      error:  error.message
+      error: error.message
     });
   }
 };
@@ -212,7 +212,7 @@ exports.createOrder = async (req, res) => {
     const enrichedItems = await enrichItemsWithMenuData(safeItems);
 
     const computedTotal = enrichedItems.reduce((acc, it) => acc + (Number(it.price || 0) * Number(it.quantity || 0)), 0);
-    const total = (typeof totalAmount === 'number' && ! isNaN(totalAmount)) ? totalAmount : computedTotal;
+    const total = (typeof totalAmount === 'number' && !isNaN(totalAmount)) ? totalAmount : computedTotal;
     const final = (typeof finalAmount === 'number' && !isNaN(finalAmount)) ? finalAmount : total;
 
     const newOrder = new orderModel({
@@ -221,10 +221,10 @@ exports.createOrder = async (req, res) => {
       cashier,
       items: enrichedItems,
       totalAmount: total,
-      discount:  discount || 0,
-      finalAmount:  final,
+      discount: discount || 0,
+      finalAmount: final,
       paymentMethod,
-      orderStatus:  orderStatus || 'pending'
+      orderStatus: orderStatus || 'pending'
     });
 
     if (process.env.NODE_ENV !== 'production') {
@@ -245,7 +245,7 @@ exports.createOrder = async (req, res) => {
       });
       sockets.emitOrderCreated({
         _id: saved._id,
-        tableNumber:  saved.tableNumber,
+        tableNumber: saved.tableNumber,
         items: enrichedItems,
         totalAmount: total,
         finalAmount: final,
@@ -282,19 +282,19 @@ exports.createOrder = async (req, res) => {
 exports.updateOrder = async (req, res) => {
   try {
     const orderId = req.params.id || req.params.orderId;
-    
+
     console.log('========================================');
     console.log('updateOrder called');
     console.log('orderId:', orderId);
     console.log('body:', req.body);
     console.log('========================================');
-    
+
     const {
       tableNumber, items, totalAmount, discount,
       finalAmount, paidAmount, change,
       paymentMethod, orderStatus, paidAt,
       // ✅ Check items fields
-      checkItemsRequestedAt, 
+      checkItemsRequestedAt,
       checkItemsRequestedBy,
       checkItemsStatus,
       checkItemsCompletedBy,
@@ -390,9 +390,9 @@ exports.updateOrder = async (req, res) => {
     );
 
     if (!updated) {
-      return res. status(404).json({
+      return res.status(404).json({
         success: false,
-        message:  'Không tìm thấy order'
+        message: 'Không tìm thấy order'
       });
     }
 
@@ -410,7 +410,7 @@ exports.updateOrder = async (req, res) => {
         _id: updated._id,
         tableNumber: updated.tableNumber,
         orderStatus: updated.orderStatus,
-        ... updates
+        ...updates
       });
       console.log(`✅ Emitted order_updated for order ${updated._id}`);
     } catch (emitError) {
@@ -449,7 +449,7 @@ exports.deleteOrder = async (req, res) => {
 
     // ✅✅✅ THÊM: Emit order_deleted
     try {
-      sockets. emitOrderDeleted({
+      sockets.emitOrderDeleted({
         _id: deleted._id,
         tableNumber: deleted.tableNumber
       });
@@ -461,7 +461,7 @@ exports.deleteOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Xóa order thành công',
-      data:  deleted
+      data: deleted
     });
   } catch (error) {
     console.error('deleteOrder error:', error);
@@ -482,22 +482,22 @@ exports.deleteOrder = async (req, res) => {
  */
 exports.payOrder = async (req, res) => {
 
-/**
- * Reset trạng thái bàn sau khi thanh toán
- * @param {number} tableNumber
- * @returns {Promise<Object|null>}
- */
-async function resetTableAfterPayment(tableNumber) {
-  if (tableNumber === undefined || tableNumber === null) return null;
+  /**
+   * Reset trạng thái bàn sau khi thanh toán
+   * @param {number} tableNumber
+   * @returns {Promise<Object|null>}
+   */
+  async function resetTableAfterPayment(tableNumber) {
+    if (tableNumber === undefined || tableNumber === null) return null;
 
-  const updatedTable = await tableModel.findOneAndUpdate(
-    { tableNumber },
-    { status: 'available', currentOrder: null, updatedAt: Date.now() },
-    { new: true }
-  );
+    const updatedTable = await tableModel.findOneAndUpdate(
+      { tableNumber },
+      { status: 'available', currentOrder: null, updatedAt: Date.now() },
+      { new: true }
+    );
 
-  return updatedTable;
-}
+    return updatedTable;
+  }
 };
 
 
@@ -538,17 +538,17 @@ exports.payOrder = async (req, res) => {
     });
 
     const paid = Number(paidAmount) || 0;
-    
+
     // Nếu thanh toán thẻ với paidAmount = 0, cho phép (đang chờ VNPay callback)
     if (paymentMethod === 'Thẻ' && paid === 0) {
       return { success: true, message: 'Đang xử lý thanh toán thẻ' };
     }
-    
+
     // Nếu có voucher, yêu cầu thanh toán hết
     if (voucherId && paid < order.finalAmount) {
       return { success: false, message: 'Khi sử dụng voucher, phải thanh toán toàn bộ số tiền' };
     }
-    
+
     if (isNaN(paid) || paid < order.finalAmount) {
       return { success: false, message: 'Thanh toán thất bại: số tiền không hợp lệ' };
     }
@@ -629,15 +629,15 @@ exports.payOrder = async (req, res) => {
         details: { orders: [order._id] }
       });
     }
-    await dailyReport. save();
+    await dailyReport.save();
 
     // Emit realtime cho TẤT CẢ bàn - CHUẨN HÓA QUA sockets.js
     console.log('[SOCKET] Emitting orderPaid:', {
       orderId: order._id,
       tableNumber: order.tableNumber
     });
-    sockets.emitOrderPaid({ 
-      orderId:  order._id,
+    sockets.emitOrderPaid({
+      orderId: order._id,
       tableNumbers: tableNumbersToReset
     });
     for (const table of resetTables) {
@@ -650,16 +650,16 @@ exports.payOrder = async (req, res) => {
 
     return {
       success: true,
-      message: `Thanh toán thành công.  Đã reset ${resetTables.length} bàn:  ${tableNumbersToReset. join(', ')}`,
-      data: { 
-        resetTables, 
-        revenue, 
-        history, 
-        dailyReport 
+      message: `Thanh toán thành công.  Đã reset ${resetTables.length} bàn:  ${tableNumbersToReset.join(', ')}`,
+      data: {
+        resetTables,
+        revenue,
+        history,
+        dailyReport
       }
     };
-      data: { table: tableReset, revenue, history, dailyReport }
-    
+    data: { table: tableReset, revenue, history, dailyReport }
+
 
   } catch (err) {
     console.error('payOrder error:', err);
@@ -669,14 +669,30 @@ exports.payOrder = async (req, res) => {
 
 /**
  * GET /orders/historyod - Danh sách đơn đã thanh toán
+ * ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
  */
 exports.getPaidOrders = async (req, res) => {
   try {
-    const paidOrders = await orderModel
-      .find({ orderStatus: 'paid' })
-      .sort({ paidAt: -1 })
+    const { History } = require('../model/history.model');
+
+    const paymentHistories = await History
+      .find({ action: 'pay' })
+      .sort({ createdAt: -1 })
       .lean()
       .exec();
+
+    // Format lại dữ liệu để tương thích với response cũ
+    const paidOrders = paymentHistories.map(h => ({
+      _id: h.orderId,
+      historyId: h._id,
+      tableNumber: h.tableNumber,
+      finalAmount: h.details?.finalAmount || 0,
+      totalAmount: h.details?.totalAmount || 0,
+      paymentMethod: h.details?.paymentMethod || 'cash',
+      paidAt: h.details?.paidAt || h.createdAt,
+      items: h.details?.items || [],
+      orderStatus: 'paid'
+    }));
 
     res.status(200).json({
       success: true,
@@ -697,14 +713,16 @@ exports.getPaidOrders = async (req, res) => {
 // ========================================
 
 /**
- * GET /orders/byDate? fromDate=... &toDate=...
+ * GET /orders/byDate?fromDate=...&toDate=...
+ * ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
  */
 exports.getRevenueByDate = async (req, res) => {
   try {
+    const { History } = require('../model/history.model');
     let { fromDate, toDate } = req.query;
 
     if (!fromDate || !toDate) {
-      return res. status(400).json({
+      return res.status(400).json({
         success: false,
         message: 'Cần truyền fromDate và toDate (format YYYY-MM-DD)'
       });
@@ -713,30 +731,31 @@ exports.getRevenueByDate = async (req, res) => {
     fromDate = new Date(fromDate + 'T00:00:00Z');
     toDate = new Date(toDate + 'T23:59:59Z');
 
-    const paidOrders = await orderModel
+    const paymentHistories = await History
       .find({
-        orderStatus: 'paid',
-        paidAt: { $gte:  fromDate, $lte: toDate }
+        action: 'pay',
+        createdAt: { $gte: fromDate, $lte: toDate }
       })
       .lean()
       .exec();
 
     const revenueMap = {};
 
-    paidOrders.forEach(order => {
-      const day = order.paidAt.toISOString().slice(0, 10);
+    paymentHistories.forEach(history => {
+      const paidAt = history.details?.paidAt || history.createdAt;
+      const day = new Date(paidAt).toISOString().slice(0, 10);
       if (!revenueMap[day]) {
-        revenueMap[day] = { totalAmount: 0, totalOrders:  0 };
+        revenueMap[day] = { totalAmount: 0, totalOrders: 0 };
       }
-      revenueMap[day]. totalAmount += order.finalAmount || 0;
+      revenueMap[day].totalAmount += history.details?.finalAmount || 0;
       revenueMap[day].totalOrders += 1;
     });
 
     const revenueItems = Object.keys(revenueMap).map(day => ({
       id: uuidv4(),
       date: day,
-      totalAmount:  revenueMap[day].totalAmount,
-      totalOrders:  revenueMap[day].totalOrders
+      totalAmount: revenueMap[day].totalAmount,
+      totalOrders: revenueMap[day].totalOrders
     }));
 
     res.status(200).json({
@@ -755,20 +774,27 @@ exports.getRevenueByDate = async (req, res) => {
 
 /**
  * GET /orders/revenue
+ * ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
  */
 exports.getRevenueFromOrders = async (req, res) => {
   try {
-    const paidOrders = await orderModel. find({ orderStatus: 'paid' }).lean().exec();
+    const { History } = require('../model/history.model');
+
+    const paymentHistories = await History
+      .find({ action: 'pay' })
+      .lean()
+      .exec();
 
     const revenueMap = {};
 
-    paidOrders.forEach(order => {
-      const day = order.paidAt.toISOString().slice(0, 10);
+    paymentHistories.forEach(history => {
+      const paidAt = history.details?.paidAt || history.createdAt;
+      const day = new Date(paidAt).toISOString().slice(0, 10);
       if (!revenueMap[day]) {
         revenueMap[day] = { totalAmount: 0, totalOrders: 0 };
       }
-      revenueMap[day].totalAmount += order.finalAmount || 0;
-      revenueMap[day]. totalOrders += 1;
+      revenueMap[day].totalAmount += history.details?.finalAmount || 0;
+      revenueMap[day].totalOrders += 1;
     });
 
     const revenueItems = Object.keys(revenueMap).map(day => ({
@@ -790,7 +816,7 @@ exports.getRevenueFromOrders = async (req, res) => {
       error: error.message
     });
   }
-}; 
+};
 
 // ========================================
 // SPECIAL FEATURES
@@ -825,7 +851,7 @@ exports.requestTempCalculation = async (req, res) => {
         orderId: order._id,
         tableNumber: order.tableNumber,
         requestedAt: order.tempCalculationRequestedAt,
-        requestedBy:  requestedBy
+        requestedBy: requestedBy
       });
       console.log(`✅ Emitted temp_calculation_request for table ${order.tableNumber}`);
     } catch (emitError) {
@@ -842,7 +868,7 @@ exports.requestTempCalculation = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi tạo yêu cầu tạm tính',
-      error:  error.message
+      error: error.message
     });
   }
 };
@@ -879,9 +905,9 @@ exports.getCheckItemsRequestsCount = async (req, res) => {
 exports.getCheckItemsRequests = async (req, res) => {
   try {
     let query = orderModel.find({
-      checkItemsRequestedAt:  { $ne: null }
+      checkItemsRequestedAt: { $ne: null }
     }).sort({ checkItemsRequestedAt: -1 });
-    
+
     query = populateOrderQuery(query);
     const orders = await query.lean().exec();
 
@@ -895,7 +921,7 @@ exports.getCheckItemsRequests = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Lỗi khi lấy danh sách yêu cầu kiểm tra bàn',
-      error: error. message
+      error: error.message
     });
   }
 };
@@ -927,11 +953,11 @@ exports.requestCheckItems = async (req, res) => {
 
     // ✅✅✅ THÊM: Emit check_items_request
     try {
-      sockets. emitCheckItemsRequest({
+      sockets.emitCheckItemsRequest({
         orderId: order._id,
         tableNumber: order.tableNumber,
         requestedAt: order.checkItemsRequestedAt,
-        requestedBy:  requestedBy
+        requestedBy: requestedBy
       });
       console.log(`✅ Emitted check_items_request for table ${order.tableNumber}`);
     } catch (emitError) {
@@ -1012,9 +1038,9 @@ exports.completeCheckItems = async (req, res) => {
  */
 exports.acknowledgeCheckItems = async (req, res) => {
   try {
-    const { orderId } = req. params;
+    const { orderId } = req.params;
     const order = await orderModel.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message:  'Order không tồn tại' });
+    if (!order) return res.status(404).json({ success: false, message: 'Order không tồn tại' });
 
     order.checkItemsStatus = 'acknowledged';
     // giữ lại checkItemsRequestedBy/At để lưu vết
@@ -1028,7 +1054,7 @@ exports.acknowledgeCheckItems = async (req, res) => {
     return res.status(200).json({ success: true, message: 'Đã xác nhận đã nhận kết quả kiểm tra', data: order });
   } catch (error) {
     console.error('acknowledgeCheckItems error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi xác nhận đã nhận kết quả kiểm tra', error: error. message });
+    return res.status(500).json({ success: false, message: 'Lỗi xác nhận đã nhận kết quả kiểm tra', error: error.message });
   }
 };
 
@@ -1038,7 +1064,7 @@ exports.acknowledgeCheckItems = async (req, res) => {
  */
 exports.checkOrderItems = async (req, res) => {
   try {
-    const { orderId } = req. params;
+    const { orderId } = req.params;
     const { checkItemsNote } = req.body;
     const order = await orderModel.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: 'Order không tồn tại' });
