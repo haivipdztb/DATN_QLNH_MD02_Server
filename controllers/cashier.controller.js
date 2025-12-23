@@ -1,5 +1,5 @@
-const {orderModel} = require('../model/order.model');
-const {tableModel} = require('../model/table.model');
+const { orderModel } = require('../model/order.model');
+const { tableModel } = require('../model/table.model');
 
 // Lấy tất cả hóa đơn (orders)
 exports.getAllInvoices = async (req, res) => {
@@ -8,7 +8,7 @@ exports.getAllInvoices = async (req, res) => {
             .populate('items.menuItem')
             .populate('server', 'name')
             .populate('cashier', 'name')
-            .sort({createdAt: -1});
+            .sort({ createdAt: -1 });
 
         res.status(200).json({
             success: true,
@@ -26,13 +26,13 @@ exports.getAllInvoices = async (req, res) => {
 // Lấy hóa đơn theo trạng thái thanh toán
 exports.getInvoicesByStatus = async (req, res) => {
     try {
-        const {status} = req.params; // pending, paid, cancelled
-        
-        const orders = await orderModel.find({orderStatus: status})
+        const { status } = req.params; // pending, paid, cancelled
+
+        const orders = await orderModel.find({ orderStatus: status })
             .populate('items.menuItem')
             .populate('server', 'name')
             .populate('cashier', 'name')
-            .sort({createdAt: -1});
+            .sort({ createdAt: -1 });
 
         res.status(200).json({
             success: true,
@@ -54,7 +54,7 @@ exports.getInvoiceById = async (req, res) => {
             .populate('items.menuItem')
             .populate('server', 'name')
             .populate('cashier', 'name');
-        
+
         if (!invoice) {
             return res.status(404).json({
                 success: false,
@@ -78,15 +78,15 @@ exports.getInvoiceById = async (req, res) => {
 // Lấy hóa đơn theo số bàn
 exports.getInvoiceByTable = async (req, res) => {
     try {
-        const {tableNumber} = req.params;
-        
+        const { tableNumber } = req.params;
+
         const invoice = await orderModel.findOne({
             tableNumber: parseInt(tableNumber),
-            orderStatus: {$in: ['pending', 'preparing', 'ready', 'served']}
+            orderStatus: { $in: ['pending', 'preparing', 'ready', 'served'] }
         })
-        .populate('items.menuItem')
-        .populate('server', 'name')
-        .populate('cashier', 'name');
+            .populate('items.menuItem')
+            .populate('server', 'name')
+            .populate('cashier', 'name');
 
         if (!invoice) {
             return res.status(404).json({
@@ -111,8 +111,8 @@ exports.getInvoiceByTable = async (req, res) => {
 // Tính tổng tiền hóa đơn (có thể áp dụng giảm giá)
 exports.calculateTotal = async (req, res) => {
     try {
-        const {orderId} = req.params;
-        const {discount} = req.body; // Giảm giá (%)
+        const { orderId } = req.params;
+        const { discount } = req.body; // Giảm giá (%)
 
         const order = await orderModel.findById(orderId)
             .populate('items.menuItem');
@@ -162,8 +162,8 @@ exports.calculateTotal = async (req, res) => {
 // Thanh toán hóa đơn
 exports.processPayment = async (req, res) => {
     try {
-        const {orderId} = req.params;
-        const {paymentMethod, paidAmount, cashierId} = req.body;
+        const { orderId } = req.params;
+        const { paymentMethod, paidAmount, cashierId } = req.body;
 
         const order = await orderModel.findById(orderId);
         if (!order) {
@@ -198,8 +198,8 @@ exports.processPayment = async (req, res) => {
 
         // Cập nhật trạng thái bàn về available
         await tableModel.findOneAndUpdate(
-            {tableNumber: order.tableNumber},
-            {status: 'available', currentOrder: null}
+            { tableNumber: order.tableNumber },
+            { status: 'available', currentOrder: null }
         );
 
         const updatedOrder = await orderModel.findById(orderId)
@@ -224,7 +224,7 @@ exports.processPayment = async (req, res) => {
 // In hóa đơn (trả về dữ liệu để in)
 exports.printInvoice = async (req, res) => {
     try {
-        const {orderId} = req.params;
+        const { orderId } = req.params;
 
         const order = await orderModel.findById(orderId)
             .populate('items.menuItem')
@@ -277,8 +277,8 @@ exports.printInvoice = async (req, res) => {
 // Hủy hóa đơn
 exports.cancelInvoice = async (req, res) => {
     try {
-        const {orderId} = req.params;
-        const {reason} = req.body;
+        const { orderId } = req.params;
+        const { reason } = req.body;
 
         const order = await orderModel.findById(orderId);
         if (!order) {
@@ -302,8 +302,8 @@ exports.cancelInvoice = async (req, res) => {
 
         // Cập nhật trạng thái bàn
         await tableModel.findOneAndUpdate(
-            {tableNumber: order.tableNumber},
-            {status: 'available', currentOrder: null}
+            { tableNumber: order.tableNumber },
+            { status: 'available', currentOrder: null }
         );
 
         res.status(200).json({
@@ -321,26 +321,41 @@ exports.cancelInvoice = async (req, res) => {
 };
 
 // Thống kê doanh thu theo ngày
+// ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
 exports.getDailySales = async (req, res) => {
     try {
-        const {date} = req.query; // Format: YYYY-MM-DD
-        
+        const { History } = require('../model/history.model');
+        const { date } = req.query; // Format: YYYY-MM-DD
+
         const startDate = date ? new Date(date) : new Date();
         startDate.setHours(0, 0, 0, 0);
-        
+
         const endDate = new Date(startDate);
         endDate.setHours(23, 59, 59, 999);
 
-        const orders = await orderModel.find({
-            orderStatus: 'paid',
-            paidAt: {
+        // Lấy từ History model với action='pay'
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: {
                 $gte: startDate,
                 $lte: endDate
             }
-        });
+        }).lean();
 
-        const totalSales = orders.reduce((sum, order) => sum + order.finalAmount, 0);
-        const totalOrders = orders.length;
+        const totalSales = paymentHistories.reduce((sum, h) => sum + (h.details?.finalAmount || 0), 0);
+        const totalOrders = paymentHistories.length;
+
+        // Format lại dữ liệu để tương thích với response cũ
+        const orders = paymentHistories.map(h => ({
+            _id: h.orderId,
+            tableNumber: h.tableNumber,
+            finalAmount: h.details?.finalAmount || 0,
+            totalAmount: h.details?.totalAmount || 0,
+            paymentMethod: h.details?.paymentMethod || 'cash',
+            paidAt: h.details?.paidAt || h.createdAt,
+            items: h.details?.items || [],
+            historyId: h._id
+        }));
 
         res.status(200).json({
             success: true,
@@ -364,7 +379,7 @@ exports.getDailySales = async (req, res) => {
 exports.splitInvoice = async (req, res) => {
     try {
         const { orderId } = req.params;
-        const { splits } = req.body; 
+        const { splits } = req.body;
         // splits = [
         //   { items: [{ menuItem: "id1", quantity: 2 }], paymentMethod: "cash" },
         //   { items: [{ menuItem: "id2", quantity: 1 }], paymentMethod: "card" }
@@ -379,7 +394,7 @@ exports.splitInvoice = async (req, res) => {
 
         // Lấy order gốc
         const originalOrder = await orderModel.findById(orderId).populate('items.menuItem');
-        
+
         if (!originalOrder) {
             return res.status(404).json({
                 success: false,
@@ -396,10 +411,10 @@ exports.splitInvoice = async (req, res) => {
 
         // Tạo các order mới từ splits
         const newOrders = [];
-        
+
         for (let i = 0; i < splits.length; i++) {
             const split = splits[i];
-            
+
             // Tính toán cho order con
             let totalAmount = 0;
             const enrichedItems = [];
@@ -465,11 +480,11 @@ exports.splitInvoice = async (req, res) => {
         const populatedOrders = await orderModel.find({
             _id: { $in: newOrders.map(o => o._id) }
         })
-        .populate('server', 'name username')
-        .populate('cashier', 'name username')
-        .populate('items.menuItem', 'name price image')
-        .lean()
-        .exec();
+            .populate('server', 'name username')
+            .populate('cashier', 'name username')
+            .populate('items.menuItem', 'name price image')
+            .lean()
+            .exec();
 
         res.status(200).json({
             success: true,

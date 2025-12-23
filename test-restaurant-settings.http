@@ -1,0 +1,95 @@
+### Restaurant Settings & Password Management APIs
+@baseUrl = http://localhost:3000
+
+### ============================================
+### RESTAURANT SETTINGS APIs
+### ============================================
+
+### 1. Get Restaurant Settings
+GET {{baseUrl}}/restaurant-settings
+Content-Type: application/json
+
+### 2. Update Restaurant Settings
+PUT {{baseUrl}}/restaurant-settings
+Content-Type: application/json
+
+{
+  "restaurantName": "Nhà Hàng Món Ngon",
+  "address": "123 Đường ABC, Quận 1, TP.HCM",
+  "phoneNumber": "0901234567",
+  "email": "contact@nhahang.com",
+  "openingTime": "09:00",
+  "closingTime": "23:00",
+  "description": "Nhà hàng chuyên các món ăn Việt Nam truyền thống",
+  "logo": "/images/logo.png",
+  "taxRate": 10,
+  "serviceCharge": 5,
+  "currency": "VND",
+  "timezone": "Asia/Ho_Chi_Minh"
+}
+
+### 3. Update Partial Settings (chỉ cập nhật một số trường)
+PUT {{baseUrl}}/restaurant-settings
+Content-Type: application/json
+
+{
+  "restaurantName": "Nhà Hàng ABC",
+  "openingTime": "10:00",
+  "closingTime": "22:00"
+}
+
+### ============================================
+### PASSWORD MANAGEMENT APIs
+### ============================================
+
+### 4. Change Password (yêu cầu mật khẩu cũ)
+POST {{baseUrl}}/restaurant-settings/change-password
+Content-Type: application/json
+
+{
+  "userId": "676889e4a5e1234567890abc",
+  "oldPassword": "admin123",
+  "newPassword": "newpassword123"
+}
+
+### 5. Admin Reset Password (không cần mật khẩu cũ)
+POST {{baseUrl}}/restaurant-settings/admin-reset-password
+Content-Type: application/json
+
+{
+  "userId": "676889e4a5e1234567890abc",
+  "newPassword": "resetpassword123"
+}
+
+### ============================================
+### TEST SCENARIOS
+### ============================================
+
+### 6. Test - Đổi mật khẩu với mật khẩu cũ sai
+POST {{baseUrl}}/restaurant-settings/change-password
+Content-Type: application/json
+
+{
+  "userId": "676889e4a5e1234567890abc",
+  "oldPassword": "wrongpassword",
+  "newPassword": "newpassword123"
+}
+
+### 7. Test - Đổi mật khẩu quá ngắn
+POST {{baseUrl}}/restaurant-settings/change-password
+Content-Type: application/json
+
+{
+  "userId": "676889e4a5e1234567890abc",
+  "oldPassword": "admin123",
+  "newPassword": "123"
+}
+
+### 8. Test - Thiếu thông tin
+POST {{baseUrl}}/restaurant-settings/change-password
+Content-Type: application/json
+
+{
+  "userId": "676889e4a5e1234567890abc",
+  "oldPassword": "admin123"
+}

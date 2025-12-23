@@ -1,0 +1,2 @@
+### Test Manual Update
+GET http://localhost:3000/menu/update-availability

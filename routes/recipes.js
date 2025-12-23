@@ -12,7 +12,7 @@ router.get('/:id/total-time', recipeController.calculateTotalTime);
 router.get('/:id/check-ingredients', recipeController.checkIngredientsAvailability);
 
 router.get('/:id', recipeController.getRecipeById);
-
+  
 // POST, PUT, DELETE routes
 router.post('/consume', recipeController.consumeRecipe);
 

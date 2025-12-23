@@ -1,0 +1,71 @@
+### Menu Availability Auto-Update APIs
+@baseUrl = http://localhost:3000
+
+### ============================================
+### MENU AVAILABILITY APIs
+### ============================================
+
+### 1. Cập nhật trạng thái tất cả món ăn
+GET {{baseUrl}}/menu/update-availability
+Content-Type: application/json
+
+### 2. Cập nhật trạng thái một món ăn cụ thể
+GET {{baseUrl}}/menu/676889e4a5e1234567890abc/update-availability
+Content-Type: application/json
+
+### 3. Lấy danh sách tất cả món ăn (kiểm tra status)
+GET {{baseUrl}}/menu
+Content-Type: application/json
+
+### ============================================
+### TEST WORKFLOW
+### ============================================
+
+### 4. Bước 1: Kiểm tra nguyên liệu hiện tại
+GET {{baseUrl}}/ingredients
+Content-Type: application/json
+
+### 5. Bước 2: Lấy nguyên liệu (giảm số lượng)
+POST {{baseUrl}}/ingredients/676889e4a5e1234567890abc/take
+Content-Type: application/json
+
+{
+  "amount": 50
+}
+
+### 6. Bước 3: Kiểm tra món ăn đã chuyển sang soldout chưa
+GET {{baseUrl}}/menu
+Content-Type: application/json
+
+### 7. Bước 4: Nhập lại nguyên liệu
+POST {{baseUrl}}/ingredients/676889e4a5e1234567890abc/restock
+Content-Type: application/json
+
+{
+  "amount": 100
+}
+
+### 8. Bước 5: Kiểm tra món ăn đã chuyển về available chưa
+GET {{baseUrl}}/menu
+Content-Type: application/json
+
+### ============================================
+### MANUAL TRIGGER
+### ============================================
+
+### 9. Trigger manual update tất cả món
+GET {{baseUrl}}/menu/update-availability
+Content-Type: application/json
+
+### Expected Response:
+# {
+#   "success": true,
+#   "message": "Đã cập nhật trạng thái tất cả món ăn",
+#   "data": {
+#     "total": 26,
+#     "updated": 5,
+#     "available": 20,
+#     "soldout": 6,
+#     "timestamp": "2025-12-23T03:45:00.000Z"
+#   }
+# }

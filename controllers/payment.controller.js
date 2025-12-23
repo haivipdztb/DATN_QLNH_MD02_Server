@@ -4,7 +4,7 @@ const { orderModel } = require('../model/order.model');
 
 const {
   vnp_TmnCode,
-  vnp_HashSecret,
+  vnp_HashSecret = '',
   vnp_Url,
   vnp_ReturnUrl
 } = process.env;
@@ -44,21 +44,21 @@ function formatDate(date) {
  * ✅ LẤY IP THỰC CỦA CLIENT (IPv4 only)
  */
 function getClientIp(req) {
-  let ip = req.headers['x-forwarded-for']?.split(',')[0] || 
-           req.connection.remoteAddress || 
-           req.socket.remoteAddress || 
-           '127.0.0.1';
-  
+  let ip = req.headers['x-forwarded-for']?.split(',')[0] ||
+    req.connection.remoteAddress ||
+    req.socket.remoteAddress ||
+    '127.0.0.1';
+
   // ✅ Convert IPv6 localhost to IPv4
   if (ip === '::1' || ip === '::ffff:127.0.0.1') {
     ip = '127.0.0.1';
   }
-  
+
   // ✅ Remove IPv6 prefix if exists
   if (ip.startsWith('::ffff:')) {
     ip = ip.replace('::ffff:', '');
   }
-  
+
   return ip;
 }
 
@@ -70,7 +70,7 @@ exports.createCardPayment = async (req, res) => {
   try {
     const { orderId, orderIds, voucherId } = req.body;
     let finalOrderId = orderId;
-    
+
     if (!finalOrderId && orderIds && orderIds.length > 0) {
       // Try to find merged order that contains these orderIds in mergedFrom
       console.log('TRYING TO FIND MERGED ORDER for orderIds:', orderIds);
@@ -94,9 +94,9 @@ exports.createCardPayment = async (req, res) => {
         }
       }
     }
-    
+
     console.log('FINAL ORDER ID:', finalOrderId);
-    
+
     if (!finalOrderId) {
       return res.status(400).json({ success: false, message: 'Không tìm thấy order hợp lệ' });
     }
@@ -144,7 +144,7 @@ exports.createCardPayment = async (req, res) => {
           cashier: 'system'
         }
       });
-      
+
       if (result.success) {
         return res.json({
           success: true,
@@ -158,7 +158,7 @@ exports.createCardPayment = async (req, res) => {
 
 
     // ✅ TxnRef phải unique
-  const txnRef = `${orderId}_${Date.now()}`;
+    const txnRef = `${orderId}_${Date.now()}`;
 
 
 
@@ -170,7 +170,7 @@ exports.createCardPayment = async (req, res) => {
       vnp_Amount: amount,
       vnp_CurrCode: 'VND',
       vnp_TxnRef: txnRef,
-     vnp_OrderInfo: `Thanh_toan_don_${orderId}`,  // ✅ Không dùng ký tự đặc biệt
+      vnp_OrderInfo: `Thanh_toan_don_${orderId}`,  // ✅ Không dùng ký tự đặc biệt
       vnp_OrderType: 'billpayment',
       vnp_Locale: 'vn',
       vnp_ReturnUrl: vnp_ReturnUrl,
@@ -180,19 +180,19 @@ exports.createCardPayment = async (req, res) => {
 
     // ✅ SORT A-Z
     vnp_Params = Object.keys(vnp_Params)
-  .sort()
-  .reduce((obj, key) => {
-    obj[key] = vnp_Params[key];
-    return obj;
-  }, {});
+      .sort()
+      .reduce((obj, key) => {
+        obj[key] = vnp_Params[key];
+        return obj;
+      }, {});
 
     // ✅ TẠO CHỮ KÝ (với encodeURIComponent)
- const signData = buildSignData(vnp_Params);
+    const signData = buildSignData(vnp_Params);
 
     const secureHash = crypto
-  .createHmac('sha512', vnp_HashSecret.trim())
-  .update(signData, 'utf8')
-  .digest('hex');
+      .createHmac('sha512', vnp_HashSecret.trim())
+      .update(signData, 'utf8')
+      .digest('hex');
 
     console.log('🔥 CREATE PAYMENT DEBUG:');
     console.log('Amount:', amount);
@@ -203,13 +203,13 @@ exports.createCardPayment = async (req, res) => {
     console.log('SecureHash:', secureHash);
     console.log('---');
 
-    
-vnp_Params.vnp_SecureHash = secureHash
+
+    vnp_Params.vnp_SecureHash = secureHash
 
     // ✅ TẠO URL (CÓ encode)
     const paymentUrl = vnp_Url + '?' + qs.stringify(vnp_Params, { encode: true });
 
-  
+
 
 
     return res.json({
@@ -280,7 +280,7 @@ exports.vnpayReturn = async (req, res) => {
       },
       {
         status: () => ({
-          json: () => {}
+          json: () => { }
         })
       }
     );
