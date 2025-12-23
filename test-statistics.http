@@ -1,0 +1,223 @@
+### Test Statistics and Overview APIs
+### Base URL
+@baseUrl = http://localhost:3000
+
+### ============================================
+### REVENUE & STATISTICS APIs
+### ============================================
+
+### 1. Get Revenue Statistics (Daily)
+GET {{baseUrl}}/api/revenue/statistics?startDate=2025-12-01&endDate=2025-12-22&timeFrame=daily
+Content-Type: application/json
+
+### 2. Get Revenue Statistics (Weekly)
+GET {{baseUrl}}/api/revenue/statistics?startDate=2025-12-01&endDate=2025-12-22&timeFrame=weekly
+Content-Type: application/json
+
+### 3. Get Revenue Statistics (Monthly)
+GET {{baseUrl}}/api/revenue/statistics?startDate=2025-12-01&endDate=2025-12-22&timeFrame=monthly
+Content-Type: application/json
+
+### 4. Get Revenue by Payment Method
+GET {{baseUrl}}/api/revenue/by-payment-method?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 5. Get Total Revenue
+GET {{baseUrl}}/api/revenue/total?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### ============================================
+### ORDER STATISTICS APIs
+### ============================================
+
+### 6. Get All Orders (with date filter)
+GET {{baseUrl}}/api/orders?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 7. Get Orders by Status
+GET {{baseUrl}}/api/orders?status=paid&startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 8. Get Order Statistics
+GET {{baseUrl}}/api/orders/statistics?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 9. Get Top Selling Items
+GET {{baseUrl}}/api/orders/top-selling?startDate=2025-12-01&endDate=2025-12-22&limit=10
+Content-Type: application/json
+
+### ============================================
+### REPORT APIs
+### ============================================
+
+### 10. Generate Daily Report
+POST {{baseUrl}}/api/reports/generate
+Content-Type: application/json
+
+{
+  "reportType": "daily",
+  "date": "2025-12-15",
+  "timeFrame": "daily"
+}
+
+### 11. Generate Weekly Report
+POST {{baseUrl}}/api/reports/generate
+Content-Type: application/json
+
+{
+  "reportType": "weekly",
+  "startDate": "2025-12-01",
+  "endDate": "2025-12-07",
+  "timeFrame": "weekly"
+}
+
+### 12. Generate Monthly Report
+POST {{baseUrl}}/api/reports/generate
+Content-Type: application/json
+
+{
+  "reportType": "monthly",
+  "startDate": "2025-12-01",
+  "endDate": "2025-12-31",
+  "timeFrame": "monthly"
+}
+
+### 13. Get All Reports
+GET {{baseUrl}}/api/reports
+Content-Type: application/json
+
+### 14. Get Report by ID
+GET {{baseUrl}}/api/reports/676889e4a5e1234567890abc
+Content-Type: application/json
+
+### ============================================
+### DASHBOARD OVERVIEW APIs
+### ============================================
+
+### 15. Get Dashboard Overview
+GET {{baseUrl}}/api/dashboard/overview?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 16. Get Today's Overview
+GET {{baseUrl}}/api/dashboard/today
+Content-Type: application/json
+
+### 17. Get This Week's Overview
+GET {{baseUrl}}/api/dashboard/week
+Content-Type: application/json
+
+### 18. Get This Month's Overview
+GET {{baseUrl}}/api/dashboard/month
+Content-Type: application/json
+
+### ============================================
+### MENU STATISTICS APIs
+### ============================================
+
+### 19. Get All Menu Items
+GET {{baseUrl}}/api/menu
+Content-Type: application/json
+
+### 20. Get Menu Items by Category
+GET {{baseUrl}}/api/menu?category=Món chính
+Content-Type: application/json
+
+### 21. Get Menu Item Performance
+GET {{baseUrl}}/api/menu/performance?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### ============================================
+### TABLE STATISTICS APIs
+### ============================================
+
+### 22. Get All Tables
+GET {{baseUrl}}/api/tables
+Content-Type: application/json
+
+### 23. Get Table Utilization
+GET {{baseUrl}}/api/tables/utilization?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### 24. Get Available Tables
+GET {{baseUrl}}/api/tables?status=available
+Content-Type: application/json
+
+### ============================================
+### INGREDIENT STATISTICS APIs
+### ============================================
+
+### 25. Get All Ingredients
+GET {{baseUrl}}/api/ingredients
+Content-Type: application/json
+
+### 26. Get Low Stock Ingredients
+GET {{baseUrl}}/api/ingredients?status=low_stock
+Content-Type: application/json
+
+### 27. Get Out of Stock Ingredients
+GET {{baseUrl}}/api/ingredients?status=out_of_stock
+Content-Type: application/json
+
+### 28. Get Ingredients by Category
+GET {{baseUrl}}/api/ingredients?category=tuoi
+Content-Type: application/json
+
+### ============================================
+### VOUCHER STATISTICS APIs
+### ============================================
+
+### 29. Get All Vouchers
+GET {{baseUrl}}/api/vouchers
+Content-Type: application/json
+
+### 30. Get Active Vouchers
+GET {{baseUrl}}/api/vouchers?isActive=true
+Content-Type: application/json
+
+### 31. Get Voucher Usage Statistics
+GET {{baseUrl}}/api/vouchers/statistics?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### ============================================
+### USER/STAFF STATISTICS APIs
+### ============================================
+
+### 32. Get All Users
+GET {{baseUrl}}/api/users
+Content-Type: application/json
+
+### 33. Get Users by Role
+GET {{baseUrl}}/api/users?role=waiter
+Content-Type: application/json
+
+### 34. Get Staff Performance
+GET {{baseUrl}}/api/users/performance?startDate=2025-12-01&endDate=2025-12-22
+Content-Type: application/json
+
+### ============================================
+### COMPARISON APIs
+### ============================================
+
+### 35. Compare Revenue (This Period vs Last Period)
+GET {{baseUrl}}/api/revenue/compare?currentStart=2025-12-15&currentEnd=2025-12-22&previousStart=2025-12-08&previousEnd=2025-12-14
+Content-Type: application/json
+
+### 36. Compare Orders (This Period vs Last Period)
+GET {{baseUrl}}/api/orders/compare?currentStart=2025-12-15&currentEnd=2025-12-22&previousStart=2025-12-08&previousEnd=2025-12-14
+Content-Type: application/json
+
+### ============================================
+### EXPORT APIs
+### ============================================
+
+### 37. Export Revenue Report (Excel)
+GET {{baseUrl}}/api/revenue/export?startDate=2025-12-01&endDate=2025-12-22&format=excel
+Content-Type: application/json
+
+### 38. Export Order Report (Excel)
+GET {{baseUrl}}/api/orders/export?startDate=2025-12-01&endDate=2025-12-22&format=excel
+Content-Type: application/json
+
+### 39. Export Ingredient Report (Excel)
+GET {{baseUrl}}/api/ingredients/export?format=excel
+Content-Type: application/json

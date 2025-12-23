@@ -1,0 +1,11 @@
+### Test trigger khi update ingredient
+PUT http://localhost:3000/ingredients/6934dd2f532483dbac6e424a
+Content-Type: application/json
+
+{
+  "name": "Rocket Salad",
+  "unit": "kg",
+  "quantity": 0,
+  "minThreshold": 5,
+  "category": "tuoi"
+}

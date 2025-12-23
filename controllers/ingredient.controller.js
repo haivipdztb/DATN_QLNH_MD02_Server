@@ -74,7 +74,7 @@ exports.createIngredient = async (req, res) => {
       category
     } = req.body;
 
-        const newIngredient = new ingredientModel({
+    const newIngredient = new ingredientModel({
       name,
       tag,
       unit,
@@ -87,7 +87,7 @@ exports.createIngredient = async (req, res) => {
       importPrice,
       category,
       lastRestocked: quantity > 0 ? new Date() : null
-        });
+    });
 
     const saved = await newIngredient.save();
 
@@ -146,6 +146,15 @@ exports.takeIngredient = async (req, res) => {
 
     // Middleware sẽ tự động cập nhật status
     await ingredient.save();
+
+    // Trigger cập nhật trạng thái món ăn
+    try {
+      const { updateAllMenuAvailability } = require('../services/menuAvailability.service');
+      await updateAllMenuAvailability();
+      console.log('✅ Đã cập nhật trạng thái món ăn sau khi lấy nguyên liệu');
+    } catch (error) {
+      console.error('⚠️ Lỗi khi cập nhật trạng thái món:', error);
+    }
 
     // Kiểm tra nếu hết hàng hoặc sắp hết
     let notification = null;
@@ -208,6 +217,16 @@ exports.restockIngredient = async (req, res) => {
     ingredient.quantity += amount;
     ingredient.lastRestocked = new Date();
     await ingredient.save();
+
+    // Trigger cập nhật trạng thái món ăn
+    try {
+      const { updateAllMenuAvailability } = require('../services/menuAvailability.service');
+      await updateAllMenuAvailability();
+      console.log('✅ Đã cập nhật trạng thái món ăn sau khi nhập nguyên liệu');
+    } catch (error) {
+      console.error('⚠️ Lỗi khi cập nhật trạng thái món:', error);
+      // Không throw error để không ảnh hưởng đến việc nhập hàng
+    }
 
     return res.status(200).json({
       success: true,
@@ -282,6 +301,15 @@ exports.updateIngredient = async (req, res) => {
         success: false,
         message: 'Không tìm thấy nguyên liệu'
       });
+    }
+
+    // Trigger cập nhật trạng thái món ăn
+    try {
+      const { updateAllMenuAvailability } = require('../services/menuAvailability.service');
+      await updateAllMenuAvailability();
+      console.log('✅ Đã cập nhật trạng thái món ăn sau khi cập nhật nguyên liệu');
+    } catch (error) {
+      console.error('⚠️ Lỗi khi cập nhật trạng thái món:', error);
     }
 
     return res.status(200).json({
