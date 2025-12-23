@@ -350,7 +350,7 @@ exports.updateOrder = async (req, res) => {
 
     // Basic fields
     if (tableNumber !== undefined) updates.tableNumber = tableNumber;
-    if (items !== undefined) updates.items = items;
+    if (items !== undefined) updates.items = (typeof enrichedItems !== 'undefined') ? enrichedItems : items;
     if (totalAmount !== undefined) updates.totalAmount = totalAmount;
     if (discount !== undefined) updates.discount = discount;
     if (finalAmount !== undefined) updates.finalAmount = finalAmount;
