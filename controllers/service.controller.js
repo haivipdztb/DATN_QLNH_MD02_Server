@@ -78,15 +78,17 @@ exports.getServingInvoices = async (req, res) => {
 
 /**
  * Cashier: Lấy danh sách hóa đơn đã thanh toán
+ * ĐÃ SỬA: Lấy từ History model (action='pay') thay vì Order model
  */
 exports.getPaidInvoices = async (req, res) => {
     try {
+        const { History } = require('../model/history.model');
         const { startDate, endDate } = req.query;
 
-        const filter = { orderStatus: 'paid' };
+        let dateFilter = {};
 
         if (startDate && endDate) {
-            filter.paidAt = {
+            dateFilter = {
                 $gte: new Date(startDate),
                 $lte: new Date(endDate)
             };
@@ -97,16 +99,35 @@ exports.getPaidInvoices = async (req, res) => {
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
 
-            filter.paidAt = {
+            dateFilter = {
                 $gte: today,
                 $lt: tomorrow
             };
         }
 
-        const paidInvoices = await orderModel.find(filter)
-            .populate('server cashier')
-            .sort({ paidAt: -1 })
+        // Lấy từ History model với action='pay'
+        const paymentHistories = await History.find({
+            action: 'pay',
+            createdAt: dateFilter
+        })
+            .sort({ createdAt: -1 })
             .lean();
+
+        // Format lại dữ liệu để tương thích với response cũ
+        const paidInvoices = paymentHistories.map(h => ({
+            _id: h.orderId,
+            historyId: h._id,
+            tableNumber: h.tableNumber,
+            finalAmount: h.details?.finalAmount || 0,
+            totalAmount: h.details?.totalAmount || 0,
+            discount: (h.details?.totalAmount || 0) - (h.details?.finalAmount || 0),
+            paymentMethod: h.details?.paymentMethod || 'cash',
+            paidAt: h.details?.paidAt || h.createdAt,
+            createdAt: h.createdAt,
+            items: h.details?.items || [],
+            server: h.performedBy,
+            cashier: h.details?.cashier || null
+        }));
 
         // Tính tổng
         const summary = {
