@@ -55,7 +55,6 @@ const { tableModel } = require('../model/table.model');
 const { Revenue } = require('../model/revenue.model');
 const { History } = require('../model/history.model');
 const { reportModel } = require('../model/report.model');
-const { v4: uuidv4 } = require('uuid');
 
 /**
  * Helper:  enrich incoming items array by looking up menuModel when menuItem id provided.  
