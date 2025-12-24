@@ -67,8 +67,16 @@ exports.createMenuItem = async (req, res) => {
         } catch (emitError) {
             console.warn('⚠️ Failed to emit menu_item_created:', emitError);
         }
+        // check trùng
+        const existingItem = await menuModel.findOne({ name });
+        if (existingItem) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tên món ăn đã tồn tại'
+            });
+        }
 
-        res. status(201).json({
+        res.status(201).json({
             success: true,
             message:  'Thêm menu item thành công',
             data: newMenuItem
