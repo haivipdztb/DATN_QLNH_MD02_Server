@@ -55,7 +55,6 @@ const { tableModel } = require('../model/table.model');
 const { Revenue } = require('../model/revenue.model');
 const { History } = require('../model/history.model');
 const { reportModel } = require('../model/report.model');
-const { v4: uuidv4 } = require('uuid');
 
 /**
  * Helper:  enrich incoming items array by looking up menuModel when menuItem id provided.  
@@ -351,7 +350,7 @@ exports.updateOrder = async (req, res) => {
 
     // Basic fields
     if (tableNumber !== undefined) updates.tableNumber = tableNumber;
-    if (items !== undefined) updates.items = items;
+    if (items !== undefined) updates.items = (typeof enrichedItems !== 'undefined') ? enrichedItems : items;
     if (totalAmount !== undefined) updates.totalAmount = totalAmount;
     if (discount !== undefined) updates.discount = discount;
     if (finalAmount !== undefined) updates.finalAmount = finalAmount;
@@ -575,7 +574,7 @@ exports.payOrder = async (req, res) => {
       action: 'pay',
       performedBy: cashier || 'unknown',
       details: {
-        items: order.items,
+        items: order.items.filter(item => ['pending', 'preparing', 'ready'].includes(item.status)),
         totalAmount: order.totalAmount,
         finalAmount: order.finalAmount,
         orderStatus: 'paid',
